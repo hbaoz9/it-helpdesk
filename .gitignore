@@ -4,6 +4,5 @@ coverage/
 
 .env
 .env.*
-!.env.example*.tsbuildinfo
 *.tsbuildinfo
 !.env.example
