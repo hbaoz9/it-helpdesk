@@ -1,0 +1,478 @@
+
+/* ==============================
+   GLOBAL LOGIN
+============================== */
+
+.login-container {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 0.9fr;
+  background: #080e1b;
+  color: #ffffff;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ==============================
+   LEFT INTRO PANEL
+============================== */
+
+.login-intro {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 55px 8%;
+  background:
+    radial-gradient(
+      circle at 15% 20%,
+      rgba(0, 174, 255, 0.16),
+      transparent 35%
+    ),
+    radial-gradient(
+      circle at 85% 85%,
+      rgba(29, 78, 216, 0.15),
+      transparent 35%
+    ),
+    #080e1b;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.login-intro::before {
+  content: "";
+  position: absolute;
+  width: 350px;
+  height: 350px;
+  top: 25%;
+  right: -100px;
+  border: 1px solid rgba(56, 189, 248, 0.12);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 40px rgba(56, 189, 248, 0.025),
+    0 0 0 80px rgba(56, 189, 248, 0.02);
+  pointer-events: none;
+}
+
+.intro-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 570px;
+  margin: auto;
+}
+
+/* BRAND */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 90px;
+}
+
+.brand-logo {
+  width: 45px;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+  box-shadow: 0 5px 20px rgba(14, 165, 233, 0.25);
+}
+
+.brand-name {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+/* INTRO CONTENT */
+
+.intro-tag,
+.welcome-label {
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+}
+
+.intro-main h1 {
+  margin: 22px 0;
+  color: #ffffff;
+  font-size: clamp(34px, 4vw, 55px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -1.5px;
+}
+
+.intro-main h1 span {
+  color: #38bdf8;
+}
+
+.intro-description {
+  max-width: 470px;
+  color: #94a3b8;
+  font-size: 15px;
+  line-height: 1.9;
+  margin-bottom: 42px;
+}
+
+/* FEATURES */
+
+.intro-features {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.feature-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 12px;
+  background: rgba(14, 165, 233, 0.08);
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feature-item h3 {
+  margin: 0 0 5px;
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.feature-item p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* INTRO FOOTER */
+
+.intro-footer {
+  display: flex;
+  align-items: center;
+  margin-top: 85px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  margin-right: 9px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.6);
+}
+
+.footer-year {
+  margin-left: auto;
+}
+
+/* ==============================
+   RIGHT LOGIN PANEL
+============================== */
+
+.login-form-section {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 55px 9%;
+  background: #0d1423;
+}
+
+.login-form-wrapper {
+  width: 100%;
+  max-width: 420px;
+}
+
+.mobile-brand {
+  display: none;
+}
+
+/* WELCOME */
+
+.welcome-text {
+  margin-bottom: 35px;
+}
+
+.welcome-text h2.ant-typography {
+  margin: 15px 0 10px;
+  color: #f8fafc;
+  font-size: 29px;
+  font-weight: 700;
+}
+
+.welcome-text .ant-typography {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* FORM */
+
+.login-form .ant-form-item {
+  margin-bottom: 23px;
+}
+
+.login-form .ant-form-item-label > label {
+  color: #cbd5e1 !important;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.login-form .ant-input,
+.login-form .ant-input-affix-wrapper {
+  min-height: 48px;
+  border: 1px solid #273449;
+  border-radius: 9px;
+  background: #151f30;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.login-form .ant-input {
+  background: transparent;
+}
+
+.login-form .ant-input::placeholder {
+  color: #64748b;
+}
+
+.login-form .ant-input-affix-wrapper input {
+  color: #ffffff;
+}
+
+.login-form .ant-input-password-icon {
+  color: #94a3b8;
+}
+
+.login-form .ant-input-affix-wrapper:hover,
+.login-form .ant-input-affix-wrapper-focused,
+.login-form .ant-input:hover,
+.login-form .ant-input:focus {
+  border-color: #0ea5e9;
+  background: #151f30;
+}
+
+.login-form .ant-input-affix-wrapper-focused {
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+}
+
+/* LOGIN OPTIONS */
+
+.login-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 27px;
+}
+
+.remember-checkbox {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.remember-checkbox .ant-checkbox-inner {
+  background: #151f30;
+  border-color: #475569;
+}
+
+.forgot-password {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.forgot-password:hover {
+  color: #7dd3fc;
+}
+
+/* SUBMIT BUTTON */
+
+.submit-item {
+  margin-bottom: 20px !important;
+}
+
+.login-submit {
+  position: relative;
+  height: 49px;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #0284c7, #2563eb);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 7px 20px rgba(37, 99, 235, 0.2);
+  transition: all 0.25s ease;
+}
+
+.login-submit:hover {
+  background: linear-gradient(90deg, #0ea5e9, #3b82f6) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+}
+
+.button-arrow {
+  margin-left: 10px;
+  font-size: 18px;
+}
+
+/* DIVIDER */
+
+.login-divider.ant-divider {
+  margin: 25px 0;
+  border-color: #273449;
+  color: #64748b;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+}
+
+/* GOOGLE BUTTON */
+
+.google-login {
+  height: 49px;
+  border: 1px solid #273449;
+  border-radius: 9px;
+  background: #151f30;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.google-login:hover {
+  border-color: #38bdf8 !important;
+  background: #1a2a40 !important;
+  color: #ffffff !important;
+}
+
+.google-icon {
+  margin-right: 10px;
+  color: #4285f4;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+/* BOTTOM */
+
+.login-bottom {
+  margin-top: 48px;
+  text-align: center;
+}
+
+.login-bottom .ant-typography {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.login-bottom p {
+  margin-top: 7px;
+  color: #475569;
+  font-size: 10px;
+}
+
+/* ==============================
+   RESPONSIVE
+============================== */
+
+@media (max-width: 1024px) {
+  .login-container {
+    grid-template-columns: 0.9fr 1fr;
+  }
+
+  .login-intro {
+    padding: 40px 7%;
+  }
+
+  .login-form-section {
+    padding: 40px 7%;
+  }
+
+  .brand {
+    margin-bottom: 65px;
+  }
+
+  .intro-main h1 {
+    font-size: 38px;
+  }
+}
+
+@media (max-width: 768px) {
+  .login-container {
+    display: block;
+    min-height: 100vh;
+  }
+
+  .login-intro {
+    display: none;
+  }
+
+  .login-form-section {
+    min-height: 100vh;
+    padding: 35px 24px;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .mobile-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 45px;
+  }
+
+  .login-form-wrapper {
+    max-width: 450px;
+  }
+
+  .welcome-text h2.ant-typography {
+    font-size: 25px;
+  }
+
+  .login-bottom {
+    margin-top: 35px;
+  }
+}
+
+@media (max-width: 380px) {
+  .login-form-section {
+    padding: 28px 18px;
+  }
+
+  .login-options {
+    align-items: flex-start;
+  }
+
+  .remember-checkbox,
+  .forgot-password {
+    font-size: 11px;
+  }
+
+  .welcome-text h2.ant-typography {
+    font-size: 22px;
+  }
+}
