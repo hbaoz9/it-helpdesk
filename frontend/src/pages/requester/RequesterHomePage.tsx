@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import {
   Button,
-  Card,
   Col,
   Descriptions,
   Row,
@@ -42,13 +41,18 @@ function RequesterHomePage() {
       key: "code",
       width: 130,
       render: (code: string) => (
-        <Typography.Text strong>{code}</Typography.Text>
+        <Typography.Text strong style={{ color: "#38bdf8" }}>
+          {code}
+        </Typography.Text>
       ),
     },
     {
       title: "Tiêu đề sự cố",
       dataIndex: "title",
       key: "title",
+      render: (title: string) => (
+        <span style={{ color: "#f8fafc", fontWeight: 500 }}>{title}</span>
+      ),
     },
     {
       title: "Danh mục",
@@ -60,7 +64,7 @@ function RequesterHomePage() {
       title: "Ưu tiên",
       dataIndex: "priority",
       key: "priority",
-      width: 135,
+      width: 145,
       render: (priority: MockTicket["priority"]) => {
         const meta = PRIORITY_METADATA[priority];
         return <Tag color={meta.color}>{meta.label}</Tag>;
@@ -70,7 +74,7 @@ function RequesterHomePage() {
       title: "Trạng thái",
       dataIndex: "status",
       key: "status",
-      width: 220,
+      width: 225,
       render: (status: MockTicket["status"]) => {
         const meta = STATUS_METADATA[status];
         return <Tag color={meta.color}>{meta.label}</Tag>;
@@ -99,56 +103,65 @@ function RequesterHomePage() {
       {/* Khu vực thống kê nhanh (Dữ liệu minh họa) */}
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card variant="borderless">
+          <div className="rp-card" style={{ padding: 20 }}>
             <Statistic
               title="Tổng Ticket của tôi (Minh họa)"
               value={totalCount}
+              valueStyle={{ color: "#f8fafc", fontWeight: 800 }}
               suffix="yêu cầu"
             />
-          </Card>
+          </div>
         </Col>
 
         <Col xs={24} sm={12} lg={6}>
-          <Card variant="borderless">
+          <div className="rp-card" style={{ padding: 20 }}>
             <Statistic
               title="Đang chờ / Đang xử lý"
               value={activeCount}
-              valueStyle={{ color: "#0284c7" }}
+              valueStyle={{ color: "#38bdf8", fontWeight: 800 }}
               suffix="Ticket"
             />
-          </Card>
+          </div>
         </Col>
 
         <Col xs={24} sm={12} lg={6}>
-          <Card variant="borderless">
+          <div className="rp-card" style={{ padding: 20 }}>
             <Statistic
               title="Cần phản hồi / Xác nhận"
               value={actionRequiredCount}
-              valueStyle={{ color: "#d97706" }}
+              valueStyle={{ color: "#fbbf24", fontWeight: 800 }}
               suffix="Ticket"
             />
-          </Card>
+          </div>
         </Col>
 
         <Col xs={24} sm={12} lg={6}>
-          <Card variant="borderless">
+          <div className="rp-card" style={{ padding: 20 }}>
             <Statistic
               title="Đã hoàn tất (CLOSED)"
               value={closedCount}
-              valueStyle={{ color: "#16a34a" }}
+              valueStyle={{ color: "#4ade80", fontWeight: 800 }}
               suffix="Ticket"
             />
-          </Card>
+          </div>
         </Col>
       </Row>
 
       {/* Vòng đời xử lý sự cố theo SRS 6.1 */}
-      <Card
-        title="Quy trình xử lý sự cố tiêu chuẩn (Incident Workflow V1)"
-        extra={
-          <Tag color="blue">Chuẩn hóa theo SRS &amp; API Contract</Tag>
-        }
-      >
+      <div className="rp-card">
+        <div className="rp-card-header">
+          <div>
+            <h2 className="rp-card-title">
+              Quy trình xử lý sự cố tiêu chuẩn{" "}
+              <span>(Incident Workflow V1)</span>
+            </h2>
+            <p className="rp-card-subtitle">
+              Vòng đời trạng thái chuẩn hóa theo tài liệu SRS &amp; API Contract
+            </p>
+          </div>
+          <span className="rp-matrix-badge">SRS Baseline</span>
+        </div>
+
         <Steps
           size="small"
           current={3}
@@ -179,25 +192,40 @@ function RequesterHomePage() {
             },
           ]}
         />
-      </Card>
+      </div>
 
       {/* Danh sách Ticket gần đây */}
-      <Card
-        title="Yêu cầu hỗ trợ gần đây của tôi (Dữ liệu minh họa – chưa kết nối Backend)"
-        extra={
-          <Space>
-            <Button onClick={() => navigate("/requester/tickets")}>
+      <div className="rp-card">
+        <div className="rp-card-header">
+          <div>
+            <h2 className="rp-card-title">
+              Yêu cầu hỗ trợ gần đây của tôi{" "}
+              <span>(Dữ liệu minh họa – chưa kết nối Backend)</span>
+            </h2>
+            <p className="rp-card-subtitle">
+              Nhấp Xem chi tiết để kiểm tra ngăn thông tin SLA, trao đổi công
+              khai và thao tác xác nhận/mở lại
+            </p>
+          </div>
+
+          <Space wrap>
+            <button
+              type="button"
+              className="rp-btn-secondary"
+              onClick={() => navigate("/requester/tickets")}
+            >
               Xem tất cả Ticket
-            </Button>
-            <Button
-              type="primary"
+            </button>
+            <button
+              type="button"
+              className="rp-btn-primary"
               onClick={() => navigate("/requester/tickets/new")}
             >
               + Tạo yêu cầu mới
-            </Button>
+            </button>
           </Space>
-        }
-      >
+        </div>
+
         <Table<MockTicket>
           rowKey="id"
           columns={recentColumns}
@@ -205,12 +233,19 @@ function RequesterHomePage() {
           pagination={false}
           size="middle"
         />
-      </Card>
+      </div>
 
       {/* Thông tin hướng dẫn SLA & Quyền của Requester */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title="Chính sách cam kết thời gian SLA 24/7 (Tham chiếu V1)">
+          <div className="rp-card" style={{ height: "100%" }}>
+            <div className="rp-side-header">
+              <h3 className="rp-side-title">
+                <span className="rp-cyan-dot" />
+                <span>Chính sách cam kết thời gian SLA 24/7 (V1)</span>
+              </h3>
+            </div>
+
             <Descriptions column={1} size="small" bordered>
               <Descriptions.Item label="P1 – Critical">
                 Phản hồi đầu tiên: <strong>15 phút</strong> · Giải quyết:{" "}
@@ -229,30 +264,36 @@ function RequesterHomePage() {
                 <strong>72 giờ</strong>
               </Descriptions.Item>
             </Descriptions>
-          </Card>
+          </div>
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Lưu ý dành cho người gửi yêu cầu (Requester)">
-            <Space direction="vertical" size={8}>
-              <Typography.Text>
-                • <strong>Phạm vi truy cập:</strong> Bạn chỉ xem và thao tác
-                trên các Ticket do chính mình gửi; ghi chú nội bộ (Internal
-                Notes) của bộ phận IT được bảo mật.
-              </Typography.Text>
-              <Typography.Text>
-                • <strong>Bổ sung thông tin (WAITING_REQUESTER):</strong> Khi
-                kỹ thuật viên cần thêm thông tin, gửi bình luận phản hồi sẽ
-                chuyển Ticket trở lại trạng thái đang xử lý.
-              </Typography.Text>
-              <Typography.Text>
-                • <strong>Xác nhận hoặc Mở lại (RESOLVED):</strong> Bạn có thể
-                xác nhận đóng Ticket hoặc yêu cầu mở lại (Reopen) kèm lý do
-                trong vòng <strong>72 giờ</strong>. Quá 72 giờ không phản hồi,
-                hệ thống tự động chuyển sang <strong>CLOSED</strong>.
-              </Typography.Text>
-            </Space>
-          </Card>
+          <div className="rp-card" style={{ height: "100%" }}>
+            <div className="rp-side-header">
+              <h3 className="rp-side-title">
+                <span className="rp-green-dot" />
+                <span>Lưu ý dành cho người gửi yêu cầu (Requester)</span>
+              </h3>
+            </div>
+
+            <ul className="rp-rule-list" style={{ marginBottom: 0 }}>
+              <li>
+                <strong>Phạm vi truy cập:</strong> Bạn chỉ xem và thao tác trên
+                các Ticket do chính mình gửi; ghi chú nội bộ (
+                <code>INTERNAL</code>) của bộ phận IT được bảo mật.
+              </li>
+              <li>
+                <strong>Bổ sung thông tin (WAITING_REQUESTER):</strong> Khi kỹ
+                thuật viên cần thêm thông tin, gửi bình luận phản hồi sẽ chuyển
+                Ticket trở lại trạng thái <code>IN_PROGRESS</code>.
+              </li>
+              <li>
+                <strong>Xác nhận hoặc Mở lại (RESOLVED):</strong> Bạn có thể xác
+                nhận đóng Ticket hoặc yêu cầu mở lại (Reopen) kèm lý do trong
+                vòng <strong>72 giờ</strong>.
+              </li>
+            </ul>
+          </div>
         </Col>
       </Row>
     </Space>

@@ -100,7 +100,10 @@ function MyTicketsPage() {
     setReplyDraft("");
   };
 
-  const handlePreviewWorkflowAction = (actionLabel: string, endpoint: string) => {
+  const handlePreviewWorkflowAction = (
+    actionLabel: string,
+    endpoint: string
+  ) => {
     messageApi.info(
       `Thao tác "${actionLabel}" (expectedVersion: ${
         selectedTicket?.version ?? 1
@@ -115,7 +118,9 @@ function MyTicketsPage() {
       key: "code",
       width: 125,
       render: (code: string) => (
-        <Typography.Text strong>{code}</Typography.Text>
+        <Typography.Text strong style={{ color: "#38bdf8" }}>
+          {code}
+        </Typography.Text>
       ),
     },
     {
@@ -124,7 +129,7 @@ function MyTicketsPage() {
       key: "title",
       render: (title: string, record) => (
         <div>
-          <div style={{ fontWeight: 600, color: "#0f172a" }}>{title}</div>
+          <div style={{ fontWeight: 600, color: "#f8fafc" }}>{title}</div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {record.categoryName}
           </Typography.Text>
@@ -135,7 +140,7 @@ function MyTicketsPage() {
       title: "Mức ưu tiên",
       dataIndex: "priority",
       key: "priority",
-      width: 140,
+      width: 145,
       render: (priority: PriorityLevel) => {
         const meta = PRIORITY_METADATA[priority];
         return <Tag color={meta.color}>{meta.label}</Tag>;
@@ -159,7 +164,7 @@ function MyTicketsPage() {
       responsive: ["lg"],
       render: (assigneeName: string | null) =>
         assigneeName ? (
-          <span>{assigneeName}</span>
+          <span style={{ color: "#cbd5e1" }}>{assigneeName}</span>
         ) : (
           <Typography.Text type="secondary">Chưa phân công</Typography.Text>
         ),
@@ -192,18 +197,29 @@ function MyTicketsPage() {
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       {contextHolder}
 
-      <Card
-        title="Danh sách Ticket của tôi (Dữ liệu minh họa – chưa kết nối Backend)"
-        extra={
-          <Button
-            type="primary"
+      <div className="rp-card rp-dark-form">
+        <div className="rp-card-header">
+          <div>
+            <h2 className="rp-card-title">
+              Danh sách Ticket của tôi{" "}
+              <span>(Dữ liệu minh họa – chưa kết nối Backend)</span>
+            </h2>
+            <p className="rp-card-subtitle">
+              Lọc theo trạng thái chuẩn trong API Contract hoặc tra cứu nhanh
+              theo mã Ticket
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="rp-btn-primary"
             onClick={() => navigate("/requester/tickets/new")}
           >
             + Tạo yêu cầu hỗ trợ
-          </Button>
-        }
-      >
-        <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+          </button>
+        </div>
+
+        <Row gutter={[12, 12]} style={{ marginBottom: 18 }}>
           <Col xs={24} md={10}>
             <Input.Search
               allowClear
@@ -243,7 +259,7 @@ function MyTicketsPage() {
             ),
           }}
         />
-      </Card>
+      </div>
 
       {/* Drawer xem chi tiết Ticket ở mức giao diện nền tảng */}
       <Drawer
@@ -271,7 +287,9 @@ function MyTicketsPage() {
 
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="Mã Ticket">
-                <strong>{selectedTicket.code}</strong>
+                <strong style={{ color: "#38bdf8" }}>
+                  {selectedTicket.code}
+                </strong>
               </Descriptions.Item>
               <Descriptions.Item label="Loại yêu cầu">
                 <Tag>{selectedTicket.type}</Tag>
