@@ -1,27 +1,33 @@
-import { useState } from 'react'
-import { Button, Typography } from 'antd'
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+
+import RequesterLayout from "./layouts/RequesterLayout";
+import LoginPage from "./pages/LoginPage";
+import RequesterHomePage from "./pages/requester/RequesterHomePage";
+import MyTicketsPage from "./pages/requester/MyTicketsPage";
+import CreateTicketPage from "./pages/requester/CreateTicketPage";
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <div style={{ padding: 32 }}>
-      <Typography.Title level={2}>
-        IT Helpdesk
-      </Typography.Title>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
 
-      <Typography.Paragraph>
-        Frontend Scaffold - Ant Design Test
-      </Typography.Paragraph>
+        <Route path="/requester" element={<RequesterLayout />}>
+          <Route index element={<RequesterHomePage />} />
+          <Route path="tickets" element={<MyTicketsPage />} />
+          <Route path="tickets/new" element={<CreateTicketPage />} />
+        </Route>
 
-      <Button
-        type="primary"
-        onClick={() => setCount((value) => value + 1)}
-      >
-        Kiểm tra Ant Design: {count}
-      </Button>
-    </div>
-  )
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
