@@ -28,7 +28,7 @@ describe('AppController (e2e)', () => {
 
   it('/health (GET)', async () => {
     const response = await request(app.getHttpServer())
-      .get('/health')
+      .get('/api/v1/health')
       .expect(200);
 
     expect(response.body).toEqual({
@@ -39,7 +39,7 @@ describe('AppController (e2e)', () => {
 
   it('/health/ready (GET) - healthy database', async () => {
     const response = await request(app.getHttpServer())
-      .get('/health/ready')
+      .get('/api/v1/health/ready')
       .expect(200);
 
     expect(response.body).toEqual({
@@ -55,7 +55,7 @@ describe('AppController (e2e)', () => {
     );
 
     const response = await request(app.getHttpServer())
-      .get('/health/ready')
+      .get('/api/v1/health/ready')
       .expect(503);
 
     expect(response.body).toEqual({
