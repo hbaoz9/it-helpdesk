@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ConfigProvider, Layout, theme } from 'antd';
+import { ConfigProvider, Layout, message, theme } from 'antd';
 
 import { INTERNAL_PATHS } from './internalPaths';
+import { useAuth } from '../auth/useAuth';
 import './InternalLayout.css';
 import '../styles/InternalWorkspace.css';
 
@@ -182,10 +183,31 @@ function getPageHeaderMeta(pathname: string): {
 function InternalLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [messageApi, contextHolder] = message.useMessage();
 
   const selectedKey = getSelectedKey(location.pathname);
   const headerMeta = getPageHeaderMeta(location.pathname);
   const isSupervisor = location.pathname.startsWith(INTERNAL_PATHS.supervisor);
+  const canSwitchWorkspace =
+    Boolean(user?.roles.includes('SUPERVISOR') || user?.roles.includes('ADMIN')) &&
+    Boolean(user?.roles.includes('TECHNICIAN'));
+  const visibleNavGroups = NAV_GROUPS.filter((group) =>
+    isSupervisor
+      ? group.label === 'Supervisor Workspace'
+      : group.label === 'Technician Workspace',
+  );
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      messageApi.error(
+        error instanceof Error ? error.message : 'Không thể đăng xuất.',
+      );
+    }
+  };
 
   return (
     <ConfigProvider
@@ -205,6 +227,7 @@ function InternalLayout() {
       }}
     >
       <Layout className="internal-shell">
+        {contextHolder}
         <Sider
           width={255}
           breakpoint="lg"
@@ -223,7 +246,7 @@ function InternalLayout() {
                 </div>
               </div>
 
-              {NAV_GROUPS.map((group) => (
+              {visibleNavGroups.map((group) => (
                 <nav
                   key={group.label}
                   className="internal-nav-list"
@@ -249,13 +272,15 @@ function InternalLayout() {
 
             <div className="internal-sider-footer">
               <div className="internal-user-card">
-                <div className="internal-user-avatar">IT</div>
+                <div className="internal-user-avatar">
+                  {user?.fullName.slice(0, 2).toUpperCase()}
+                </div>
                 <div className="internal-user-meta">
                   <span className="internal-user-name">
-                    Nhân viên IT (Demo)
+                    {user?.fullName}
                   </span>
                   <span className="internal-user-email">
-                    it.staff@example.com
+                    {user?.email}
                   </span>
                 </div>
               </div>
@@ -263,16 +288,16 @@ function InternalLayout() {
               <div className="internal-role-pill">
                 <span className="internal-role-dot" />
                 <span>
-                  Role: {isSupervisor ? 'SUPERVISOR' : 'TECHNICIAN'} (Demo)
+                  Role: {isSupervisor ? 'SUPERVISOR' : 'TECHNICIAN'}
                 </span>
               </div>
 
               <button
                 type="button"
                 className="internal-back-btn"
-                onClick={() => navigate('/login')}
+                onClick={handleLogout}
               >
-                ← Back to Sign In
+                Đăng xuất
               </button>
             </div>
           </div>
@@ -288,25 +313,27 @@ function InternalLayout() {
               {headerMeta.subtitle}
             </span>
 
-            <div className="internal-header-actions">
-              <button
-                type="button"
-                className="iw-btn-secondary"
-                onClick={() =>
-                  navigate(
-                    isSupervisor
-                      ? INTERNAL_PATHS.technician
-                      : INTERNAL_PATHS.supervisor,
-                  )
-                }
-              >
-                <span>
-                  {isSupervisor
-                    ? 'Chuyển sang Technician Workspace'
-                    : 'Chuyển sang Supervisor Workspace'}
-                </span>
-              </button>
-            </div>
+            {canSwitchWorkspace && (
+              <div className="internal-header-actions">
+                <button
+                  type="button"
+                  className="iw-btn-secondary"
+                  onClick={() =>
+                    navigate(
+                      isSupervisor
+                        ? INTERNAL_PATHS.technician
+                        : INTERNAL_PATHS.supervisor,
+                    )
+                  }
+                >
+                  <span>
+                    {isSupervisor
+                      ? 'Chuyển sang Technician Workspace'
+                      : 'Chuyển sang Supervisor Workspace'}
+                  </span>
+                </button>
+              </div>
+            )}
           </Header>
 
           <Content className="internal-content">
@@ -314,12 +341,11 @@ function InternalLayout() {
               <span className="iw-warning-icon">⚠</span>
               <div>
                 <div className="iw-warning-title">
-                  Dữ liệu minh họa – chưa kết nối Backend
+                  Dữ liệu Ticket đã kết nối Backend
                 </div>
                 <div className="iw-warning-desc">
-                  Giao diện nguyên mẫu FE-02 dùng dữ liệu mẫu để trình diễn bố
-                  cục. Assignment, Workflow, Internal Notes và Dashboard thật
-                  chưa được triển khai trong Tuần 3.
+                  Danh sách và chi tiết Ticket tải từ API. Phân công, Workflow,
+                  Internal Notes và Dashboard vẫn chưa được triển khai.
                 </div>
               </div>
             </div>

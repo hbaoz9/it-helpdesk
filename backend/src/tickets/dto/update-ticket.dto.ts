@@ -40,10 +40,12 @@ export class UpdateTicketDto {
     if (record.categoryId !== undefined) {
       if (
         typeof record.categoryId !== 'string' ||
-        record.categoryId.trim().length === 0
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          record.categoryId.trim(),
+        )
       ) {
         throw new BadRequestException(
-          'Ticket categoryId must be a non-empty string',
+          'Ticket categoryId must be a UUID',
         );
       }
       dto.categoryId = record.categoryId.trim();

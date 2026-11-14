@@ -16,6 +16,8 @@ describe('TicketsModule', () => {
   let prismaMock: Partial<PrismaService>;
 
   beforeEach(async () => {
+    process.env.AUTH_SESSION_SECRET ??=
+      'test-session-secret-with-at-least-32-bytes';
     prismaMock = {};
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -42,12 +44,16 @@ describe('TicketsModule', () => {
       const dto = CreateTicketDto.validate({
         title: '  Cannot connect to VPN  ',
         description: '  VPN client shows error 809  ',
-        categoryId: '  cat_01  ',
+        categoryId: '  10000000-0000-4000-8000-000000000001  ',
+        impact: 'MEDIUM',
+        urgency: 'HIGH',
       });
 
       expect(dto.title).toBe('Cannot connect to VPN');
       expect(dto.description).toBe('VPN client shows error 809');
-      expect(dto.categoryId).toBe('cat_01');
+      expect(dto.categoryId).toBe('10000000-0000-4000-8000-000000000001');
+      expect(dto.impact).toBe('MEDIUM');
+      expect(dto.urgency).toBe('HIGH');
     });
 
     it('should reject invalid CreateTicketDto payloads', () => {
@@ -56,14 +62,18 @@ describe('TicketsModule', () => {
         CreateTicketDto.validate({
           title: '',
           description: 'desc',
-          categoryId: 'cat_01',
+          categoryId: '10000000-0000-4000-8000-000000000001',
+          impact: 'LOW',
+          urgency: 'LOW',
         }),
       ).toThrow(BadRequestException);
       expect(() =>
         CreateTicketDto.validate({
           title: 'Title',
           description: '',
-          categoryId: 'cat_01',
+          categoryId: '10000000-0000-4000-8000-000000000001',
+          impact: 'LOW',
+          urgency: 'LOW',
         }),
       ).toThrow(BadRequestException);
       expect(() =>
@@ -71,6 +81,17 @@ describe('TicketsModule', () => {
           title: 'Title',
           description: 'desc',
           categoryId: '',
+          impact: 'LOW',
+          urgency: 'LOW',
+        }),
+      ).toThrow(BadRequestException);
+      expect(() =>
+        CreateTicketDto.validate({
+          title: 'Title',
+          description: 'desc',
+          categoryId: '10000000-0000-4000-8000-000000000001',
+          impact: 'URGENT',
+          urgency: 'LOW',
         }),
       ).toThrow(BadRequestException);
     });
@@ -78,11 +99,11 @@ describe('TicketsModule', () => {
     it('should validate UpdateTicketDto and reject invalid fields', () => {
       const dto = UpdateTicketDto.validate({
         title: ' Updated Title ',
-        categoryId: ' cat_02 ',
+        categoryId: ' 10000000-0000-4000-8000-000000000002 ',
       });
 
       expect(dto.title).toBe('Updated Title');
-      expect(dto.categoryId).toBe('cat_02');
+      expect(dto.categoryId).toBe('10000000-0000-4000-8000-000000000002');
 
       expect(() => UpdateTicketDto.validate({ title: '   ' })).toThrow(
         BadRequestException,
@@ -92,14 +113,14 @@ describe('TicketsModule', () => {
 
     it('should validate TicketQueryDto', () => {
       const dto = TicketQueryDto.validate({
-        categoryId: ' cat_01 ',
-        status: ' OPEN ',
+        categoryId: ' 10000000-0000-4000-8000-000000000001 ',
+        status: ' NEW ',
         page: '1',
         limit: '20',
       });
 
-      expect(dto.categoryId).toBe('cat_01');
-      expect(dto.status).toBe('OPEN');
+      expect(dto.categoryId).toBe('10000000-0000-4000-8000-000000000001');
+      expect(dto.status).toBe('NEW');
       expect(dto.page).toBe(1);
       expect(dto.limit).toBe(20);
 

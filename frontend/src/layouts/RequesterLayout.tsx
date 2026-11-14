@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ConfigProvider, Layout, Typography, message, theme } from "antd";
+import { useAuth } from "../auth/useAuth";
 
 import "./RequesterLayout.css";
 
@@ -91,7 +92,7 @@ function getPageHeaderMeta(pathname: string): {
     return {
       title: "Ticket của tôi (My Tickets)",
       subtitle:
-        "Theo dõi tiến độ xử lý, phản hồi kỹ thuật viên, xác nhận kết quả hoặc mở lại yêu cầu trong 72 giờ.",
+        "Theo dõi trạng thái và thông tin các yêu cầu hỗ trợ đã gửi.",
     };
   }
   return {
@@ -104,14 +105,21 @@ function getPageHeaderMeta(pathname: string): {
 function RequesterLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [messageApi, contextHolder] = message.useMessage();
 
   const selectedKey = getSelectedKey(location.pathname);
   const headerMeta = getPageHeaderMeta(location.pathname);
 
-  const handleBackToLogin = () => {
-    messageApi.info("Chuyển về màn hình Đăng nhập (FE-01).");
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      messageApi.error(
+        error instanceof Error ? error.message : "Không thể đăng xuất.",
+      );
+    }
   };
 
   return (
@@ -192,26 +200,28 @@ function RequesterLayout() {
 
             <div className="requester-sider-footer">
               <div className="requester-user-card">
-                <div className="requester-user-avatar">N</div>
+                <div className="requester-user-avatar">
+                  {user?.fullName.slice(0, 1).toUpperCase()}
+                </div>
                 <div className="requester-user-meta">
-                  <span className="requester-user-name">Nhân viên Demo</span>
+                  <span className="requester-user-name">{user?.fullName}</span>
                   <span className="requester-user-email">
-                    requester@example.com
+                    {user?.email}
                   </span>
                 </div>
               </div>
 
               <div className="requester-role-pill">
                 <span className="requester-role-dot" />
-                <span>Role: REQUESTER (Demo)</span>
+                <span>Role: REQUESTER</span>
               </div>
 
               <button
                 type="button"
                 className="requester-back-btn"
-                onClick={handleBackToLogin}
+                onClick={handleLogout}
               >
-                ← Back to Sign In
+                Đăng xuất
               </button>
             </div>
           </div>
@@ -233,14 +243,6 @@ function RequesterLayout() {
             <div className="requester-header-actions">
               <button
                 type="button"
-                className="rp-btn-secondary"
-                onClick={handleBackToLogin}
-              >
-                <span>Sign In Screen</span>
-              </button>
-
-              <button
-                type="button"
                 className="rp-btn-primary"
                 onClick={() => navigate("/requester/tickets/new")}
               >
@@ -254,14 +256,12 @@ function RequesterLayout() {
               <span className="rp-warning-icon">⚠</span>
               <div>
                 <div className="rp-warning-title">
-                  Dữ liệu minh họa Tuần 3 – Chưa kết nối API Backend &amp;
-                  PostgreSQL
+                  Đã kết nối xác thực và Ticket với Backend
                 </div>
                 <div className="rp-warning-desc">
-                  Giao diện nguyên mẫu FE-01 phục vụ kiểm chứng luồng trải
-                  nghiệm và bố cục của Requester. Xác thực phiên làm việc thực
-                  tế (<code>/api/v1/auth/*</code>) và lưu trữ Ticket (
-                  <code>/api/v1/tickets</code>) sẽ được tích hợp ở Tuần 4.
+                  Đăng nhập, đăng ký Requester, tạo và tra cứu Ticket được lưu
+                  qua API. Bình luận và các thao tác chuyển trạng thái chưa được
+                  triển khai.
                 </div>
               </div>
             </div>
