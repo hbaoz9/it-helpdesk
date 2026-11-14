@@ -1,0 +1,234 @@
+/* =========================================================
+   DARK PANEL CARDS
+========================================================= */
+
+.iw-card {
+  padding: 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.12);
+  background: #0b1220;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+}
+
+.iw-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.iw-card-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 15.5px;
+  font-weight: 700;
+}
+
+.iw-card-title span {
+  color: #38bdf8;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.iw-card-subtitle {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   PAGE LAYOUT HELPERS
+========================================================= */
+
+.iw-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.iw-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.iw-muted {
+  color: #64748b;
+}
+
+/* =========================================================
+   STAT CARDS (Technician / Supervisor Home)
+========================================================= */
+
+.iw-stat {
+  height: 100%;
+  padding: 20px;
+}
+
+.iw-stat-label {
+  color: #8b9bb4;
+  font-size: 14px;
+}
+
+.iw-stat-value {
+  margin-top: 4px;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #f8fafc;
+}
+
+.iw-stat-value.is-cyan {
+  color: #38bdf8;
+}
+
+.iw-stat-value.is-amber {
+  color: #fbbf24;
+}
+
+.iw-stat-value.is-green {
+  color: #4ade80;
+}
+
+/* =========================================================
+   TICKET TABLE CELLS
+========================================================= */
+
+.iw-ticket-code {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.iw-ticket-title {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+/* =========================================================
+   TICKET DETAIL
+========================================================= */
+
+.iw-detail-title {
+  margin: 0 0 16px;
+  color: #f8fafc;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.iw-comment {
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #070d19;
+}
+
+.iw-comment-author {
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.iw-comment-text {
+  margin: 6px 0;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.iw-comment-meta {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.iw-comment-form {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.iw-comment-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.iw-activity {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.iw-activity li {
+  position: relative;
+  padding: 0 0 16px 24px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.iw-activity li::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid #334155;
+  background: #0b1220;
+}
+
+.iw-activity li::after {
+  content: "";
+  position: absolute;
+  top: 17px;
+  bottom: -1px;
+  left: 5px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.iw-activity li:last-child {
+  padding-bottom: 0;
+}
+
+.iw-activity li:last-child::after {
+  display: none;
+}
+
+.iw-activity li.is-first::before {
+  border-color: #38bdf8;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.iw-note {
+  margin: 14px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.iw-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.iw-warning-banner.is-compact {
+  margin-bottom: 0;
+  padding: 12px 14px;
+}
+
+@media (max-width: 768px) {
+  .iw-card {
+    padding: 18px;
+  }
+}
