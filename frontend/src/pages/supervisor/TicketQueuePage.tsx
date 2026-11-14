@@ -1,19 +1,43 @@
+import { useEffect, useState } from 'react';
+import { Alert, Spin } from 'antd';
+import { getTickets } from '../../api/tickets';
+import type { TicketRecord } from '../../api/types';
 import TicketTable from '../../components/tickets/TicketTable';
-import { MOCK_TICKETS } from '../../data/mockTickets';
+import { toTicketRow } from '../../components/tickets/ticketAdapter';
 import '../../styles/InternalWorkspace.css';
 
-const queueTickets = MOCK_TICKETS.filter(
-  (ticket) => ticket.status === 'NEW' || ticket.status === 'TRIAGED',
-);
-
 const TicketQueuePage = () => {
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getTickets()
+      .then((result) => {
+        if (active) setTickets(result);
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : 'Không tải được Ticket');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const queueTickets = tickets
+    .filter((ticket) => ticket.status === 'NEW' || ticket.status === 'TRIAGED')
+    .map(toTicketRow);
+
   return (
     <div className="iw-card">
       <div className="iw-card-header">
         <div>
           <h2 className="iw-card-title">
-            Hàng đợi phân loại{' '}
-            <span>(Dữ liệu minh họa – chưa kết nối Backend)</span>
+            Hàng đợi phân loại
           </h2>
           <p className="iw-card-subtitle">
             Ticket ở trạng thái NEW hoặc TRIAGED đang chờ xử lý
@@ -21,10 +45,15 @@ const TicketQueuePage = () => {
         </div>
       </div>
 
-      <TicketTable
-        tickets={queueTickets}
-        emptyText="Không có Ticket trong hàng đợi"
-      />
+      {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
+      {loading ? (
+        <Spin />
+      ) : (
+        <TicketTable
+          tickets={queueTickets}
+          emptyText="Không có Ticket trong hàng đợi"
+        />
+      )}
     </div>
   );
 };

@@ -1,36 +1,30 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Alert,
   Button,
   Card,
-  Col,
   Descriptions,
-  Divider,
   Drawer,
   Empty,
   Input,
-  List,
   Row,
+  Col,
   Select,
   Space,
+  Spin,
   Table,
   Tag,
   Typography,
-  message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-
+import { ApiError } from "../../api/client";
+import { getTickets } from "../../api/tickets";
+import type { TicketRecord, TicketStatus } from "../../api/types";
 import {
-  MOCK_REQUESTER_TICKETS,
   PRIORITY_METADATA,
   STATUS_METADATA,
-} from "./requesterMockData";
-import type {
-  MockTicket,
-  PriorityLevel,
-  TicketStatus,
-} from "./requesterMockData";
+} from "./ticketMetadata";
 
 const STATUS_FILTER_OPTIONS: { value: "ALL" | TicketStatus; label: string }[] =
   [
@@ -46,7 +40,7 @@ const STATUS_FILTER_OPTIONS: { value: "ALL" | TicketStatus; label: string }[] =
   ];
 
 const PRIORITY_FILTER_OPTIONS: {
-  value: "ALL" | PriorityLevel;
+  value: "ALL" | TicketRecord["priority"];
   label: string;
 }[] = [
   { value: "ALL", label: "Tất cả mức ưu tiên" },
@@ -61,62 +55,61 @@ function MyTicketsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TicketStatus>("ALL");
-  const [priorityFilter, setPriorityFilter] = useState<"ALL" | PriorityLevel>(
-    "ALL"
-  );
-  const [replyDraft, setReplyDraft] = useState("");
-  const [messageApi, contextHolder] = message.useMessage();
+  const [priorityFilter, setPriorityFilter] = useState<
+    "ALL" | TicketRecord["priority"]
+  >("ALL");
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const selectedCode = searchParams.get("selected");
-
   const selectedTicket = useMemo(
-    () =>
-      MOCK_REQUESTER_TICKETS.find((item) => item.code === selectedCode) ?? null,
-    [selectedCode]
+    () => tickets.find((ticket) => ticket.code === selectedCode) ?? null,
+    [tickets, selectedCode],
   );
 
-  const filteredTickets = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    return MOCK_REQUESTER_TICKETS.filter((ticket) => {
-      const matchesStatus =
-        statusFilter === "ALL" || ticket.status === statusFilter;
-      const matchesPriority =
-        priorityFilter === "ALL" || ticket.priority === priorityFilter;
-      const matchesQuery =
-        !normalizedQuery ||
-        ticket.code.toLowerCase().includes(normalizedQuery) ||
-        ticket.title.toLowerCase().includes(normalizedQuery) ||
-        ticket.categoryName.toLowerCase().includes(normalizedQuery);
-      return matchesStatus && matchesPriority && matchesQuery;
-    });
+  useEffect(() => {
+    let active = true;
+    getTickets({
+      search: searchQuery.trim() || undefined,
+      status: statusFilter === "ALL" ? undefined : statusFilter,
+      priority: priorityFilter === "ALL" ? undefined : priorityFilter,
+    })
+      .then((result) => {
+        if (active) {
+          setTickets(result);
+          setError(null);
+        }
+      })
+      .catch((cause: unknown) => {
+        if (active) {
+          setError(
+            cause instanceof ApiError
+              ? cause.message
+              : "Không thể tải Ticket từ Backend.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [searchQuery, statusFilter, priorityFilter]);
 
-  const handleOpenDetail = (ticket: MockTicket) => {
+  const handleOpenDetail = (ticket: TicketRecord) => {
     setSearchParams({ selected: ticket.code });
   };
 
-  const handleCloseDetail = () => {
-    setSearchParams({});
-    setReplyDraft("");
-  };
+  const handleCloseDetail = () => setSearchParams({});
 
-  const handlePreviewWorkflowAction = (
-    actionLabel: string,
-    endpoint: string
-  ) => {
-    messageApi.info(
-      `Thao tác "${actionLabel}" (expectedVersion: ${
-        selectedTicket?.version ?? 1
-      }) đang ở mức giao diện minh họa Tuần 3. Sẽ kết nối API ${endpoint} ở Sprint tiếp theo.`
-    );
-  };
-
-  const columns: ColumnsType<MockTicket> = [
+  const columns: ColumnsType<TicketRecord> = [
     {
       title: "Mã yêu cầu",
       dataIndex: "code",
       key: "code",
-      width: 125,
+      width: 150,
       render: (code: string) => (
         <Typography.Text strong style={{ color: "#38bdf8" }}>
           {code}
@@ -131,7 +124,7 @@ function MyTicketsPage() {
         <div>
           <div style={{ fontWeight: 600, color: "#f8fafc" }}>{title}</div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {record.categoryName}
+            {record.category.name}
           </Typography.Text>
         </div>
       ),
@@ -141,31 +134,29 @@ function MyTicketsPage() {
       dataIndex: "priority",
       key: "priority",
       width: 145,
-      render: (priority: PriorityLevel) => {
+      render: (priority: TicketRecord["priority"]) => {
         const meta = PRIORITY_METADATA[priority];
         return <Tag color={meta.color}>{meta.label}</Tag>;
       },
     },
     {
-      title: "Trạng thái (Contract)",
+      title: "Trạng thái",
       dataIndex: "status",
       key: "status",
       width: 230,
-      render: (status: TicketStatus) => {
-        const meta = STATUS_METADATA[status];
-        return <Tag color={meta.color}>{meta.label}</Tag>;
-      },
+      render: (status: TicketStatus) => (
+        <Tag color={STATUS_METADATA[status].color}>
+          {STATUS_METADATA[status].label}
+        </Tag>
+      ),
     },
     {
       title: "Người xử lý",
-      dataIndex: "assigneeName",
-      key: "assigneeName",
+      key: "assignee",
       width: 190,
       responsive: ["lg"],
-      render: (assigneeName: string | null) =>
-        assigneeName ? (
-          <span style={{ color: "#cbd5e1" }}>{assigneeName}</span>
-        ) : (
+      render: (_, ticket) =>
+        ticket.assignee?.fullName ?? (
           <Typography.Text type="secondary">Chưa phân công</Typography.Text>
         ),
     },
@@ -173,8 +164,9 @@ function MyTicketsPage() {
       title: "Thời điểm tạo",
       dataIndex: "createdAt",
       key: "createdAt",
-      width: 165,
+      width: 180,
       responsive: ["md"],
+      render: (value: string) => new Date(value).toLocaleString("vi-VN"),
     },
     {
       title: "Chi tiết",
@@ -195,21 +187,14 @@ function MyTicketsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      {contextHolder}
-
       <div className="rp-card rp-dark-form">
         <div className="rp-card-header">
           <div>
-            <h2 className="rp-card-title">
-              Danh sách Ticket của tôi{" "}
-              <span>(Dữ liệu minh họa – chưa kết nối Backend)</span>
-            </h2>
+            <h2 className="rp-card-title">Danh sách Ticket của tôi</h2>
             <p className="rp-card-subtitle">
-              Lọc theo trạng thái chuẩn trong API Contract hoặc tra cứu nhanh
-              theo mã Ticket
+              Dữ liệu được lọc theo tài khoản đang đăng nhập.
             </p>
           </div>
-
           <button
             type="button"
             className="rp-btn-primary"
@@ -223,51 +208,59 @@ function MyTicketsPage() {
           <Col xs={24} md={10}>
             <Input.Search
               allowClear
-              placeholder="Tìm theo mã Ticket (VD: INC-000014) hoặc tiêu đề..."
+              placeholder="Tìm theo mã Ticket hoặc tiêu đề..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
             />
           </Col>
-
           <Col xs={24} sm={12} md={7}>
             <Select
               style={{ width: "100%" }}
               value={statusFilter}
               options={STATUS_FILTER_OPTIONS}
-              onChange={(val) => setStatusFilter(val)}
+              onChange={setStatusFilter}
             />
           </Col>
-
           <Col xs={24} sm={12} md={7}>
             <Select
               style={{ width: "100%" }}
               value={priorityFilter}
               options={PRIORITY_FILTER_OPTIONS}
-              onChange={(val) => setPriorityFilter(val)}
+              onChange={setPriorityFilter}
             />
           </Col>
         </Row>
 
-        <Table<MockTicket>
-          rowKey="id"
-          columns={columns}
-          dataSource={filteredTickets}
-          pagination={{ pageSize: 5, showSizeChanger: false }}
-          locale={{
-            emptyText: (
-              <Empty description="Không có Ticket minh họa nào khớp với bộ lọc hiện tại." />
-            ),
-          }}
-        />
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            message="Không tải được Ticket"
+            description={error}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 32 }}>
+            <Spin />
+          </div>
+        ) : (
+          <Table<TicketRecord>
+            rowKey="id"
+            columns={columns}
+            dataSource={tickets}
+            pagination={{ pageSize: 5, showSizeChanger: false }}
+            locale={{
+              emptyText: (
+                <Empty description="Không có Ticket nào khớp với bộ lọc." />
+              ),
+            }}
+          />
+        )}
       </div>
 
-      {/* Drawer xem chi tiết Ticket ở mức giao diện nền tảng */}
       <Drawer
-        title={
-          selectedTicket
-            ? `Chi tiết yêu cầu: ${selectedTicket.code} (Dữ liệu minh họa)`
-            : "Chi tiết Ticket"
-        }
+        title={selectedTicket ? `Chi tiết yêu cầu: ${selectedTicket.code}` : "Chi tiết Ticket"}
         width={680}
         open={Boolean(selectedTicket)}
         onClose={handleCloseDetail}
@@ -280,175 +273,52 @@ function MyTicketsPage() {
               message={STATUS_METADATA[selectedTicket.status].label}
               description={STATUS_METADATA[selectedTicket.status].description}
             />
-
             <Typography.Title level={5} style={{ margin: 0 }}>
               {selectedTicket.title}
             </Typography.Title>
-
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="Mã Ticket">
-                <strong style={{ color: "#38bdf8" }}>
-                  {selectedTicket.code}
-                </strong>
+                <strong style={{ color: "#38bdf8" }}>{selectedTicket.code}</strong>
               </Descriptions.Item>
               <Descriptions.Item label="Loại yêu cầu">
                 <Tag>{selectedTicket.type}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Danh mục" span={2}>
-                {selectedTicket.categoryName}
+                {selectedTicket.category.name}
               </Descriptions.Item>
-              <Descriptions.Item label="Impact (Ảnh hưởng)">
+              <Descriptions.Item label="Impact">
                 <Tag>{selectedTicket.impact}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Urgency (Khẩn cấp)">
+              <Descriptions.Item label="Urgency">
                 <Tag>{selectedTicket.urgency}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Mức ưu tiên (Priority)">
+              <Descriptions.Item label="Mức ưu tiên">
                 <Tag color={PRIORITY_METADATA[selectedTicket.priority].color}>
                   {PRIORITY_METADATA[selectedTicket.priority].label}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Phiên bản dữ liệu (version)">
+              <Descriptions.Item label="Phiên bản dữ liệu">
                 <code>v{selectedTicket.version}</code>
               </Descriptions.Item>
-              <Descriptions.Item label="Kỹ thuật viên xử lý" span={2}>
-                {selectedTicket.assigneeName ?? "Chưa phân công"}
+              <Descriptions.Item label="Kỹ thuật viên" span={2}>
+                {selectedTicket.assignee?.fullName ?? "Chưa phân công"}
               </Descriptions.Item>
-              <Descriptions.Item label="Hạn phản hồi (SLA)">
-                {selectedTicket.responseDueAt}
-              </Descriptions.Item>
-              <Descriptions.Item label="Hạn giải quyết (SLA)">
-                {selectedTicket.resolutionDueAt}
+              <Descriptions.Item label="Thời điểm tạo" span={2}>
+                {new Date(selectedTicket.createdAt).toLocaleString("vi-VN")}
               </Descriptions.Item>
             </Descriptions>
-
-            <Card size="small" title="Mô tả chi tiết từ Requester">
+            <Card size="small" title="Mô tả chi tiết">
               <Typography.Paragraph style={{ marginBottom: 0 }}>
                 {selectedTicket.description}
               </Typography.Paragraph>
             </Card>
-
             {selectedTicket.resolutionNote && (
-              <Card
-                size="small"
-                title="Nội dung giải pháp từ Kỹ thuật viên (Resolution Note)"
-              >
+              <Card size="small" title="Nội dung giải pháp">
                 <Typography.Paragraph style={{ marginBottom: 0 }}>
                   {selectedTicket.resolutionNote}
                 </Typography.Paragraph>
               </Card>
             )}
-
-            {/* Khu vực thao tác nghiệp vụ minh họa cho Requester khi Ticket ở trạng thái RESOLVED */}
-            {selectedTicket.status === "RESOLVED" && (
-              <Card
-                size="small"
-                title="Xác nhận kết quả xử lý (Minh họa UI – Tuần 3)"
-              >
-                <Typography.Paragraph
-                  type="secondary"
-                  style={{ fontSize: 13 }}
-                >
-                  Theo quy tắc BR-05, khi Ticket ở trạng thái{" "}
-                  <strong>RESOLVED</strong>, Requester có thể xác nhận đóng hoặc
-                  yêu cầu mở lại (Reopen) kèm lý do trong vòng 72 giờ.
-                </Typography.Paragraph>
-                <Space wrap>
-                  <Button
-                    type="primary"
-                    onClick={() =>
-                      handlePreviewWorkflowAction(
-                        "Xác nhận hoàn tất (RESOLVED → CLOSED)",
-                        `POST /api/v1/tickets/${selectedTicket.id}/confirm`
-                      )
-                    }
-                  >
-                    Xác nhận đã giải quyết (Confirm)
-                  </Button>
-                  <Button
-                    danger
-                    onClick={() =>
-                      handlePreviewWorkflowAction(
-                        "Yêu cầu mở lại trong 72h (RESOLVED → IN_PROGRESS)",
-                        `POST /api/v1/tickets/${selectedTicket.id}/reopen`
-                      )
-                    }
-                  >
-                    Mở lại yêu cầu (Reopen)
-                  </Button>
-                </Space>
-              </Card>
-            )}
-
-            <Divider style={{ margin: "4px 0" }} />
-
-            <Card
-              size="small"
-              title="Trao đổi công khai (PUBLIC Comments – Không hiển thị Internal Notes)"
-            >
-              <List
-                locale={{
-                  emptyText: "Chưa có bình luận công khai nào trên Ticket này.",
-                }}
-                dataSource={selectedTicket.publicComments}
-                renderItem={(item) => (
-                  <List.Item>
-                    <List.Item.Meta
-                      title={
-                        <Space>
-                          <strong>{item.authorName}</strong>
-                          <Tag color="blue">{item.authorRole}</Tag>
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 12 }}
-                          >
-                            {item.createdAt}
-                          </Typography.Text>
-                        </Space>
-                      }
-                      description={item.message}
-                    />
-                  </List.Item>
-                )}
-              />
-
-              {selectedTicket.status !== "CLOSED" &&
-                selectedTicket.status !== "REJECTED" && (
-                  <div style={{ marginTop: 12 }}>
-                    <Input.TextArea
-                      rows={3}
-                      value={replyDraft}
-                      onChange={(e) => setReplyDraft(e.target.value)}
-                      placeholder="Nhập phản hồi công khai hoặc thông tin bổ sung cho kỹ thuật viên..."
-                    />
-                    <div
-                      style={{
-                        marginTop: 8,
-                        display: "flex",
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      <Button
-                        type="primary"
-                        onClick={() => {
-                          if (!replyDraft.trim()) {
-                            messageApi.warning(
-                              "Vui lòng nhập nội dung phản hồi trước khi gửi!"
-                            );
-                            return;
-                          }
-                          handlePreviewWorkflowAction(
-                            "Gửi bình luận PUBLIC",
-                            `POST /api/v1/tickets/${selectedTicket.id}/comments`
-                          );
-                        }}
-                      >
-                        Gửi phản hồi (Minh họa)
-                      </Button>
-                    </div>
-                  </div>
-                )}
-            </Card>
           </Space>
         )}
       </Drawer>
