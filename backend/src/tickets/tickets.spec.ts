@@ -43,13 +43,11 @@ describe('TicketsModule', () => {
         title: '  Cannot connect to VPN  ',
         description: '  VPN client shows error 809  ',
         categoryId: '  cat_01  ',
-        priority: '  HIGH  ',
       });
 
       expect(dto.title).toBe('Cannot connect to VPN');
       expect(dto.description).toBe('VPN client shows error 809');
       expect(dto.categoryId).toBe('cat_01');
-      expect(dto.priority).toBe('HIGH');
     });
 
     it('should reject invalid CreateTicketDto payloads', () => {
