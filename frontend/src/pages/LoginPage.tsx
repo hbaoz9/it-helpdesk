@@ -80,7 +80,9 @@ function UserPlusIcon() {
 
 function LoginPage() {
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
-  const [previousMode, setPreviousMode] = useState<"signin" | "signup">("signin");
+  const [previousMode, setPreviousMode] = useState<"signin" | "signup">(
+    "signin",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [loginForm] = Form.useForm<LoginFormValues>();
   const [signUpForm] = Form.useForm<SignUpFormValues>();
@@ -91,7 +93,7 @@ function LoginPage() {
     window.setTimeout(() => {
       setSubmitting(false);
       messageApi.info(
-        `Đã kiểm tra hợp lệ dữ liệu (${values.email}). Chức năng xác thực phiên làm việc sẽ được kết nối API /api/v1/auth/login ở Tuần 4.`
+        `Đã kiểm tra hợp lệ dữ liệu (${values.email}). Chức năng xác thực phiên làm việc sẽ được kết nối API /api/v1/auth/login ở Tuần 4.`,
       );
     }, 400);
   };
@@ -101,7 +103,7 @@ function LoginPage() {
     window.setTimeout(() => {
       setSubmitting(false);
       messageApi.info(
-        `Đã kiểm tra thông tin đăng ký cho "${values.username}" (${values.email}). Tính năng tạo tài khoản chưa kết nối Backend trong Tuần 3.`
+        `Đã kiểm tra thông tin đăng ký cho "${values.username}" (${values.email}). Tính năng tạo tài khoản chưa kết nối Backend trong Tuần 3.`,
       );
     }, 400);
   };
@@ -117,13 +119,15 @@ function LoginPage() {
 
   const handleSelectGoogleAccount = (email: string) => {
     messageApi.info(
-      `Đã chọn tài khoản ${email}. Xác thực SSO/Session thực tế sẽ được tích hợp với Backend ở giai đoạn tiếp theo.`
+      `Đã chọn tài khoản ${email}. Xác thực SSO/Session thực tế sẽ được tích hợp với Backend ở giai đoạn tiếp theo.`,
     );
   };
 
   const handleUseAnotherAccount = () => {
     setAuthMode("signin");
-    messageApi.info("Vui lòng nhập email tài khoản khác tại biểu mẫu đăng nhập.");
+    messageApi.info(
+      "Vui lòng nhập email tài khoản khác tại biểu mẫu đăng nhập.",
+    );
   };
 
   return (
@@ -131,7 +135,11 @@ function LoginPage() {
       {contextHolder}
 
       {authMode === "google-sso" ? (
-        <div className="sso-card" role="region" aria-label="Chọn tài khoản Google">
+        <div
+          className="sso-card"
+          role="region"
+          aria-label="Chọn tài khoản Google"
+        >
           {/* SSO LEFT COLUMN */}
           <section className="sso-left">
             <div>
@@ -163,17 +171,17 @@ function LoginPage() {
                 type="button"
                 className="sso-account-item"
                 onClick={() =>
-                  handleSelectGoogleAccount("phongpt1123@ut.edu.vn")
+                  handleSelectGoogleAccount("requester@example.com")
                 }
               >
-                <div className="sso-avatar">P</div>
+                <div className="sso-avatar">N</div>
                 <div className="sso-account-info">
                   <div className="sso-account-name-row">
-                    <span className="sso-account-name">Phong Phan Thế</span>
-                    <span className="sso-domain-badge">ut.edu.vn</span>
+                    <span className="sso-account-name">Nhân viên Demo</span>
+                    <span className="sso-domain-badge">example.com</span>
                   </div>
                   <span className="sso-account-email">
-                    phongpt1123@ut.edu.vn
+                    requester@example.com
                   </span>
                 </div>
               </button>
@@ -202,7 +210,9 @@ function LoginPage() {
                   type="button"
                   className="sso-link-btn"
                   onClick={() =>
-                    messageApi.info("Tài liệu Chính sách quyền riêng tư minh họa.")
+                    messageApi.info(
+                      "Tài liệu Chính sách quyền riêng tư minh họa.",
+                    )
                   }
                 >
                   Chính sách quyền riêng tư
@@ -360,11 +370,7 @@ function LoginPage() {
                   </Form.Item>
 
                   <div className="login-options">
-                    <Form.Item
-                      name="remember"
-                      valuePropName="checked"
-                      noStyle
-                    >
+                    <Form.Item name="remember" valuePropName="checked" noStyle>
                       <Checkbox className="remember-checkbox">
                         Ghi nhớ đăng nhập
                       </Checkbox>
@@ -523,7 +529,7 @@ function LoginPage() {
                             return Promise.resolve();
                           }
                           return Promise.reject(
-                            new Error("Mật khẩu xác nhận không khớp!")
+                            new Error("Mật khẩu xác nhận không khớp!"),
                           );
                         },
                       }),
@@ -547,8 +553,8 @@ function LoginPage() {
                             ? Promise.resolve()
                             : Promise.reject(
                                 new Error(
-                                  "Vui lòng đồng ý với điều khoản dịch vụ!"
-                                )
+                                  "Vui lòng đồng ý với điều khoản dịch vụ!",
+                                ),
                               ),
                       },
                     ]}

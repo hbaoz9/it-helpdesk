@@ -1,11 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import {
-  ConfigProvider,
-  Layout,
-  Typography,
-  message,
-  theme,
-} from "antd";
+import { ConfigProvider, Layout, Typography, message, theme } from "antd";
 
 import "./RequesterLayout.css";
 
@@ -198,13 +192,11 @@ function RequesterLayout() {
 
             <div className="requester-sider-footer">
               <div className="requester-user-card">
-                <div className="requester-user-avatar">P</div>
+                <div className="requester-user-avatar">N</div>
                 <div className="requester-user-meta">
-                  <span className="requester-user-name">
-                    Phong Phan The (Demo)
-                  </span>
+                  <span className="requester-user-name">Nhân viên Demo</span>
                   <span className="requester-user-email">
-                    phongpt1123@ut.edu.vn
+                    requester@example.com
                   </span>
                 </div>
               </div>
