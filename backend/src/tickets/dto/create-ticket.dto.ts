@@ -4,7 +4,6 @@ export class CreateTicketDto {
   title!: string;
   description!: string;
   categoryId!: string;
-  priority?: string;
 
   static validate(input: unknown): CreateTicketDto {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -31,24 +30,10 @@ export class CreateTicketDto {
       throw new BadRequestException('Ticket categoryId is required');
     }
 
-    if (
-      record.priority !== undefined &&
-      (typeof record.priority !== 'string' ||
-        record.priority.trim().length === 0)
-    ) {
-      throw new BadRequestException(
-        'Ticket priority must be a non-empty string',
-      );
-    }
-
     const dto = new CreateTicketDto();
     dto.title = record.title.trim();
     dto.description = record.description.trim();
     dto.categoryId = record.categoryId.trim();
-
-    if (record.priority !== undefined) {
-      dto.priority = record.priority.trim();
-    }
 
     return dto;
   }
