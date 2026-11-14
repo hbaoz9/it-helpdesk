@@ -5,7 +5,7 @@ import {
   type ReadinessStatusResponse,
 } from './health.service.js';
 
-@Controller('health')
+@Controller('api/v1/health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
