@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
-import { PrismaClient } from '../src/generated/prisma/client.js';
-import type { RoleCode } from '../src/generated/prisma/enums.js';
+import { PrismaClient } from '../dist/generated/prisma/client.js';
+import type { RoleCode } from '../dist/generated/prisma/enums.js';
 
 const ROLES_SEED: ReadonlyArray<{
   code: RoleCode;
