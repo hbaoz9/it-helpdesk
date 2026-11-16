@@ -10,6 +10,8 @@ describe('AppController (e2e)', () => {
   let prismaService: PrismaService;
 
   beforeEach(async () => {
+    process.env.AUTH_SESSION_SECRET ??=
+      'test-session-secret-with-at-least-32-bytes';
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

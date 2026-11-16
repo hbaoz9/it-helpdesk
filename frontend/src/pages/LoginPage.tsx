@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Button,
   Checkbox,
@@ -11,6 +11,8 @@ import {
 } from "antd";
 
 import "./LoginPage.css";
+import { ApiError } from "../api/client";
+import { useAuth } from "../auth/useAuth";
 
 type AuthMode = "signin" | "signup" | "google-sso";
 
@@ -79,6 +81,8 @@ function UserPlusIcon() {
 }
 
 function LoginPage() {
+  const navigate = useNavigate();
+  const { user, loading, login, register } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [previousMode, setPreviousMode] = useState<"signin" | "signup">(
     "signin",
@@ -88,24 +92,46 @@ function LoginPage() {
   const [signUpForm] = Form.useForm<SignUpFormValues>();
   const [messageApi, contextHolder] = message.useMessage();
 
-  const handleLogin = (values: LoginFormValues) => {
+  useEffect(() => {
+    if (!loading && user) {
+      navigate(getHomePath(user.roles), { replace: true });
+    }
+  }, [loading, user, navigate]);
+
+  const handleLogin = async (values: LoginFormValues) => {
     setSubmitting(true);
-    window.setTimeout(() => {
-      setSubmitting(false);
-      messageApi.info(
-        `Đã kiểm tra hợp lệ dữ liệu (${values.email}). Chức năng xác thực phiên làm việc sẽ được kết nối API /api/v1/auth/login ở Tuần 4.`,
+    try {
+      const authenticatedUser = await login(values.email, values.password);
+      navigate(getHomePath(authenticatedUser.roles), { replace: true });
+    } catch (error) {
+      messageApi.error(
+        error instanceof ApiError
+          ? error.message
+          : "Không thể kết nối Backend. Vui lòng thử lại.",
       );
-    }, 400);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleSignUp = (values: SignUpFormValues) => {
+  const handleSignUp = async (values: SignUpFormValues) => {
     setSubmitting(true);
-    window.setTimeout(() => {
-      setSubmitting(false);
-      messageApi.info(
-        `Đã kiểm tra thông tin đăng ký cho "${values.username}" (${values.email}). Tính năng tạo tài khoản chưa kết nối Backend trong Tuần 3.`,
+    try {
+      const authenticatedUser = await register(
+        values.username,
+        values.email,
+        values.password,
       );
-    }, 400);
+      navigate(getHomePath(authenticatedUser.roles), { replace: true });
+    } catch (error) {
+      messageApi.error(
+        error instanceof ApiError
+          ? error.message
+          : "Không thể kết nối Backend. Vui lòng thử lại.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleForgotPassword = () => {
@@ -119,7 +145,7 @@ function LoginPage() {
 
   const handleSelectGoogleAccount = (email: string) => {
     messageApi.info(
-      `Đã chọn tài khoản ${email}. Xác thực SSO/Session thực tế sẽ được tích hợp với Backend ở giai đoạn tiếp theo.`,
+      `Google SSO chưa được cấu hình cho ${email}. Hãy đăng nhập bằng tài khoản IT Helpdesk.`,
     );
   };
 
@@ -502,8 +528,8 @@ function LoginPage() {
                         message: "Vui lòng nhập mật khẩu!",
                       },
                       {
-                        min: 6,
-                        message: "Mật khẩu cần tối thiểu 6 ký tự!",
+                        min: 12,
+                        message: "Mật khẩu cần tối thiểu 12 ký tự!",
                       },
                     ]}
                   >
@@ -620,11 +646,11 @@ function LoginPage() {
         </div>
       )}
 
-      {/* Thanh chuyển nhanh sang Requester Portal để phục vụ kiểm thử điều hướng FE-01 */}
+      {/* Quick switch between the connected sign-in and registration forms. */}
       <div className="fe01-preview-bar">
-        <span className="fe01-preview-badge">FE-01 UI Preview</span>
+        <span className="fe01-preview-badge">IT HELPDESK</span>
         <span className="fe01-preview-text">
-          Chưa kết nối API xác thực (Tuần 3) · Điều hướng nhanh:
+          Xác thực tài khoản Requester qua Backend
         </span>
         <div className="fe01-preview-links">
           <button
@@ -650,14 +676,19 @@ function LoginPage() {
           >
             Chọn tài khoản
           </button>
-          <span className="fe01-divider">|</span>
-          <Link to="/requester" className="fe01-portal-link">
-            Mở Requester Portal →
-          </Link>
         </div>
       </div>
     </div>
   );
+}
+
+function getHomePath(roles: string[]): string {
+  if (roles.includes("SUPERVISOR") || roles.includes("ADMIN")) {
+    return "/supervisor";
+  }
+  if (roles.includes("TECHNICIAN")) return "/technician";
+  if (roles.includes("REQUESTER")) return "/requester";
+  return "/login";
 }
 
 export default LoginPage;

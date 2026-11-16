@@ -86,6 +86,7 @@ if ((Test-Path .env) -or (Test-Path backend/.env)) {
 }
 
 $password = [guid]::NewGuid().ToString("N")
+$authSecret = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 
 $rootEnv = @"
@@ -98,6 +99,8 @@ $backendEnv = @"
 DATABASE_URL="postgresql://helpdesk:$($password)@127.0.0.1:5433/it_helpdesk?schema=public"
 "@
 
+$backendEnv = $backendEnv + "AUTH_SESSION_SECRET=$authSecret`n"
+
 [System.IO.File]::WriteAllText(
     "$PWD\.env", $rootEnv, $utf8
 )
@@ -106,7 +109,7 @@ DATABASE_URL="postgresql://helpdesk:$($password)@127.0.0.1:5433/it_helpdesk?sche
     "$PWD\backend\.env", $backendEnv, $utf8
 )
 
-Remove-Variable password,rootEnv,backendEnv
+Remove-Variable password,authSecret,rootEnv,backendEnv
 ```
 
 Đoạn lệnh tạo cùng một mật khẩu ngẫu nhiên cho Docker PostgreSQL và kết nối Prisma.
@@ -134,10 +137,13 @@ Không chạy `docker compose down -v` nếu muốn giữ dữ liệu.
 cd backend
 npx prisma validate --config prisma7.config.ts
 npx prisma generate --config prisma7.config.ts
+npx prisma migrate deploy --config prisma7.config.ts
 cd ..
 ```
 
 Prisma Client được sinh từ schema và không commit vào Git.
+Migration cũng tạo các role và danh mục mặc định để đăng ký và tạo Ticket.
+`AUTH_SESSION_SECRET` được tạo cùng file `backend/.env`; không chia sẻ giá trị này.
 
 Sau lần clone đầu tiên, cũng cần chạy `prisma generate` mỗi khi schema thay đổi.
 
@@ -161,9 +167,10 @@ cd backend
 npm run start:dev
 ```
 
-Kiểm tra API: http://localhost:3000
+Frontend gọi API qua Vite proxy `/api` tới backend tại cổng 3000.
+Backend API có prefix `/api/v1` (ví dụ `GET http://localhost:3000/api/v1/health`).
 
-Backend scaffold hiện trả về `Hello World!`.
+Đăng ký Requester tại trang đăng nhập; Technician/Supervisor/Admin cần được cấp role trong database.
 
 Nhấn `Ctrl + C` để dừng từng server.
 
@@ -202,6 +209,8 @@ Các lệnh kiểm tra được chạy tại thư mục tương ứng.
 **Port 5174 hoặc 3000 đã được sử dụng:** Kiểm tra tiến trình chiếm cổng, không tự ý đổi cổng hoặc tắt tiến trình của dự án khác.
 
 **PostgreSQL không kết nối được:** Kiểm tra Docker Desktop, `docker compose ps` và hai file `.env`.
+
+**Backend báo thiếu `AUTH_SESSION_SECRET`:** Thêm một giá trị bí mật ngẫu nhiên dài ít nhất 32 byte vào `backend/.env`. Không dùng chung giá trị này giữa môi trường hoặc commit file `.env`.
 
 **Prisma Client chưa tồn tại:** Chạy lại `npx prisma generate --config prisma7.config.ts` trong thư mục Backend.
 

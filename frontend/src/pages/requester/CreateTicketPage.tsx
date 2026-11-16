@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -8,20 +8,21 @@ import {
   Row,
   Select,
   Tag,
-  Typography,
   message,
 } from "antd";
+import { ApiError } from "../../api/client";
+import { createTicket, getCategories } from "../../api/tickets";
+import type {
+  Category,
+  ImpactLevel,
+  TicketPriority,
+  UrgencyLevel,
+} from "../../api/types";
 
 import {
-  MOCK_CATEGORIES,
   PRIORITY_METADATA,
   computePreviewPriority,
-} from "./requesterMockData";
-import type {
-  ImpactLevel,
-  PriorityLevel,
-  UrgencyLevel,
-} from "./requesterMockData";
+} from "./ticketMetadata";
 
 interface CreateIncidentFormValues {
   title: string;
@@ -53,7 +54,7 @@ const URGENCY_OPTIONS: {
 
 const MATRIX_ROWS: {
   impact: ImpactLevel;
-  cells: { urgency: UrgencyLevel; priority: PriorityLevel; label: string }[];
+  cells: { urgency: UrgencyLevel; priority: TicketPriority; label: string }[];
 }[] = [
   {
     impact: "LOW",
@@ -111,13 +112,13 @@ function CreateTicketPage() {
   const navigate = useNavigate();
   const [form] = Form.useForm<CreateIncidentFormValues>();
   const [submitting, setSubmitting] = useState(false);
-  const [lastValidatedDto, setLastValidatedDto] =
-    useState<CreateIncidentFormValues | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
 
   const watchedTitle = Form.useWatch("title", form) ?? "";
-  const watchedCategoryId =
-    Form.useWatch("categoryId", form) ?? MOCK_CATEGORIES[1].id;
+  const watchedCategoryId = Form.useWatch("categoryId", form) ?? "";
   const watchedImpact: ImpactLevel = Form.useWatch("impact", form) ?? "MEDIUM";
   const watchedUrgency: UrgencyLevel =
     Form.useWatch("urgency", form) ?? "MEDIUM";
@@ -126,20 +127,51 @@ function CreateTicketPage() {
   const previewPriority = computePreviewPriority(watchedImpact, watchedUrgency);
   const priorityMeta = PRIORITY_METADATA[previewPriority];
 
-  const handleSubmit = (values: CreateIncidentFormValues) => {
+  useEffect(() => {
+    let active = true;
+    getCategories()
+      .then((result) => {
+        if (!active) return;
+        setCategories(result);
+        if (result.length > 0) {
+          form.setFieldValue("categoryId", result[0].id);
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setCategoryError(
+            error instanceof Error ? error.message : "Không tải được danh mục",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingCategories(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [form]);
+
+  const handleSubmit = async (values: CreateIncidentFormValues) => {
     setSubmitting(true);
-    window.setTimeout(() => {
-      setSubmitting(false);
-      setLastValidatedDto(values);
-      messageApi.info(
-        "Biểu mẫu hợp lệ! Trong Tuần 3 (FE-01), dữ liệu mới được kiểm tra ở tầng giao diện, chưa lưu vào PostgreSQL qua POST /api/v1/tickets."
+    try {
+      const ticket = await createTicket(values);
+      messageApi.success(`Đã tạo Ticket ${ticket.code}`);
+      navigate(`/requester/tickets?selected=${encodeURIComponent(ticket.code)}`);
+    } catch (error) {
+      messageApi.error(
+        error instanceof ApiError
+          ? error.message
+          : "Không thể gửi yêu cầu. Vui lòng thử lại.",
       );
-    }, 350);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleReset = () => {
     form.resetFields();
-    setLastValidatedDto(null);
+    if (categories[0]) form.setFieldValue("categoryId", categories[0].id);
   };
 
   const livePayload = {
@@ -194,7 +226,6 @@ function CreateTicketPage() {
             requiredMark={false}
             className="rp-dark-form"
             initialValues={{
-              categoryId: MOCK_CATEGORIES[1].id,
               impact: "MEDIUM",
               urgency: "MEDIUM",
             }}
@@ -246,7 +277,9 @@ function CreateTicketPage() {
               <Select
                 size="large"
                 placeholder="Chọn danh mục sự cố CNTT phù hợp"
-                options={MOCK_CATEGORIES.map((category) => ({
+                loading={loadingCategories}
+                disabled={loadingCategories || categories.length === 0}
+                options={categories.map((category) => ({
                   value: category.id,
                   label: category.name,
                 }))}
@@ -393,25 +426,28 @@ function CreateTicketPage() {
                 <span>
                   {submitting
                     ? "Đang kiểm tra..."
-                    : "✦ Kiểm tra & Gửi yêu cầu (Minh họa Tuần 3)"}
+                    : "✦ Gửi yêu cầu hỗ trợ"}
                 </span>
               </button>
             </div>
           </Form>
 
-          {lastValidatedDto && (
+          {categoryError && (
             <Alert
               style={{ marginTop: 20 }}
-              type="success"
+              type="error"
               showIcon
-              message="Đã xác nhận hợp lệ dữ liệu CreateIncidentRequest DTO"
-              description={
-                <Typography.Text style={{ fontSize: 12.5 }}>
-                  Biểu mẫu đã vượt qua kiểm tra Validation phía Client. Khi ghép
-                  nối API ở Tuần 4, payload sẽ được gửi tới{" "}
-                  <code>POST /api/v1/tickets</code>.
-                </Typography.Text>
-              }
+              message="Không tải được danh mục Ticket"
+              description={categoryError}
+            />
+          )}
+          {!loadingCategories && !categoryError && categories.length === 0 && (
+            <Alert
+              style={{ marginTop: 20 }}
+              type="warning"
+              showIcon
+              message="Chưa có danh mục hoạt động"
+              description="Vui lòng yêu cầu quản trị viên cấu hình danh mục trước khi tạo Ticket."
             />
           )}
         </div>

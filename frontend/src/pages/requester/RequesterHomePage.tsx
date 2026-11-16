@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  Alert,
   Button,
   Col,
   Descriptions,
@@ -10,31 +12,54 @@ import {
   Table,
   Tag,
   Typography,
+  Spin,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { getTickets } from "../../api/tickets";
+import type { TicketRecord } from "../../api/types";
 
 import {
-  MOCK_REQUESTER_TICKETS,
   PRIORITY_METADATA,
   STATUS_METADATA,
-} from "./requesterMockData";
-import type { MockTicket } from "./requesterMockData";
+} from "./ticketMetadata";
 
 function RequesterHomePage() {
   const navigate = useNavigate();
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const totalCount = MOCK_REQUESTER_TICKETS.length;
-  const activeCount = MOCK_REQUESTER_TICKETS.filter((ticket) =>
+  useEffect(() => {
+    let active = true;
+    getTickets()
+      .then((result) => {
+        if (active) setTickets(result);
+      })
+      .catch((cause: unknown) => {
+        if (active) {
+          setError(cause instanceof Error ? cause.message : "Không tải được Ticket");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const totalCount = tickets.length;
+  const activeCount = tickets.filter((ticket) =>
     ["NEW", "TRIAGED", "ASSIGNED", "IN_PROGRESS"].includes(ticket.status)
   ).length;
-  const actionRequiredCount = MOCK_REQUESTER_TICKETS.filter((ticket) =>
+  const actionRequiredCount = tickets.filter((ticket) =>
     ["WAITING_REQUESTER", "RESOLVED"].includes(ticket.status)
   ).length;
-  const closedCount = MOCK_REQUESTER_TICKETS.filter(
+  const closedCount = tickets.filter(
     (ticket) => ticket.status === "CLOSED"
   ).length;
 
-  const recentColumns: ColumnsType<MockTicket> = [
+  const recentColumns: ColumnsType<TicketRecord> = [
     {
       title: "Mã Ticket",
       dataIndex: "code",
@@ -56,16 +81,16 @@ function RequesterHomePage() {
     },
     {
       title: "Danh mục",
-      dataIndex: "categoryName",
-      key: "categoryName",
+      key: "category",
       responsive: ["md"],
+      render: (_, ticket) => ticket.category.name,
     },
     {
       title: "Ưu tiên",
       dataIndex: "priority",
       key: "priority",
       width: 145,
-      render: (priority: MockTicket["priority"]) => {
+      render: (priority: TicketRecord["priority"]) => {
         const meta = PRIORITY_METADATA[priority];
         return <Tag color={meta.color}>{meta.label}</Tag>;
       },
@@ -75,7 +100,7 @@ function RequesterHomePage() {
       dataIndex: "status",
       key: "status",
       width: 225,
-      render: (status: MockTicket["status"]) => {
+      render: (status: TicketRecord["status"]) => {
         const meta = STATUS_METADATA[status];
         return <Tag color={meta.color}>{meta.label}</Tag>;
       },
@@ -100,12 +125,12 @@ function RequesterHomePage() {
 
   return (
     <Space direction="vertical" size={20} style={{ width: "100%" }}>
-      {/* Khu vực thống kê nhanh (Dữ liệu minh họa) */}
+      {/* Quick statistics calculated from the current user's tickets. */}
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <div className="rp-card" style={{ padding: 20 }}>
             <Statistic
-              title="Tổng Ticket của tôi (Minh họa)"
+              title="Tổng Ticket của tôi"
               value={totalCount}
               valueStyle={{ color: "#f8fafc", fontWeight: 800 }}
               suffix="yêu cầu"
@@ -199,8 +224,7 @@ function RequesterHomePage() {
         <div className="rp-card-header">
           <div>
             <h2 className="rp-card-title">
-              Yêu cầu hỗ trợ gần đây của tôi{" "}
-              <span>(Dữ liệu minh họa – chưa kết nối Backend)</span>
+              Yêu cầu hỗ trợ gần đây của tôi
             </h2>
             <p className="rp-card-subtitle">
               Nhấp Xem chi tiết để kiểm tra ngăn thông tin SLA, trao đổi công
@@ -226,13 +250,20 @@ function RequesterHomePage() {
           </Space>
         </div>
 
-        <Table<MockTicket>
-          rowKey="id"
-          columns={recentColumns}
-          dataSource={MOCK_REQUESTER_TICKETS.slice(0, 4)}
-          pagination={false}
-          size="middle"
-        />
+        {error && (
+          <Alert type="error" showIcon message="Không tải được Ticket" description={error} />
+        )}
+        {loading ? (
+          <Spin />
+        ) : (
+          <Table<TicketRecord>
+            rowKey="id"
+            columns={recentColumns}
+            dataSource={tickets.slice(0, 4)}
+            pagination={false}
+            size="middle"
+          />
+        )}
       </div>
 
       {/* Thông tin hướng dẫn SLA & Quyền của Requester */}

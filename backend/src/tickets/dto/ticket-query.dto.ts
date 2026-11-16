@@ -23,10 +23,12 @@ export class TicketQueryDto {
     if (record.categoryId !== undefined) {
       if (
         typeof record.categoryId !== 'string' ||
-        record.categoryId.trim().length === 0
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          record.categoryId.trim(),
+        )
       ) {
         throw new BadRequestException(
-          'Query parameter categoryId must be a non-empty string',
+          'Query parameter categoryId must be a UUID',
         );
       }
       dto.categoryId = record.categoryId.trim();
@@ -35,10 +37,19 @@ export class TicketQueryDto {
     if (record.status !== undefined) {
       if (
         typeof record.status !== 'string' ||
-        record.status.trim().length === 0
+        ![
+          'NEW',
+          'TRIAGED',
+          'ASSIGNED',
+          'IN_PROGRESS',
+          'WAITING_REQUESTER',
+          'RESOLVED',
+          'CLOSED',
+          'REJECTED',
+        ].includes(record.status.trim())
       ) {
         throw new BadRequestException(
-          'Query parameter status must be a non-empty string',
+          'Query parameter status is invalid',
         );
       }
       dto.status = record.status.trim();
@@ -47,10 +58,10 @@ export class TicketQueryDto {
     if (record.priority !== undefined) {
       if (
         typeof record.priority !== 'string' ||
-        record.priority.trim().length === 0
+        !['P1', 'P2', 'P3', 'P4'].includes(record.priority.trim())
       ) {
         throw new BadRequestException(
-          'Query parameter priority must be a non-empty string',
+          'Query parameter priority is invalid',
         );
       }
       dto.priority = record.priority.trim();
