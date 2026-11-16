@@ -7,9 +7,13 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
-import { AuthGuard, SESSION_COOKIE } from './auth.guard.js';
+import {
+  AuthGuard,
+  extractSessionToken,
+  SESSION_COOKIE,
+} from './auth.guard.js';
 import type { AuthenticatedRequest } from './auth.types.js';
 import { LoginDto, RegisterDto } from './dto/auth.dto.js';
 
@@ -31,7 +35,11 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.authService.register(RegisterDto.validate(input));
-    response.cookie(SESSION_COOKIE, result.token, cookieOptions);
+    const maxAge = Math.max(0, result.expiresAt.getTime() - Date.now());
+    response.cookie(SESSION_COOKIE, result.token, {
+      ...cookieOptions,
+      maxAge,
+    });
     return { user: result.user };
   }
 
@@ -41,12 +49,21 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.authService.login(LoginDto.validate(input));
-    response.cookie(SESSION_COOKIE, result.token, cookieOptions);
+    const maxAge = Math.max(0, result.expiresAt.getTime() - Date.now());
+    response.cookie(SESSION_COOKIE, result.token, {
+      ...cookieOptions,
+      maxAge,
+    });
     return { user: result.user };
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) response: Response) {
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const token = extractSessionToken(request);
+    await this.authService.logout(token);
     response.clearCookie(SESSION_COOKIE, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
