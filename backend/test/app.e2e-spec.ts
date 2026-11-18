@@ -216,6 +216,17 @@ describe('AppController & Auth (e2e)', () => {
       .expect(401);
   });
 
+  it('returns 403 for ADMIN-only Ticket reads and has no public register route', async () => {
+    vi.spyOn(authService, 'authenticate').mockResolvedValue({
+      id: 'admin-id', email: 'admin@example.com', fullName: 'Admin', roles: ['ADMIN'],
+    });
+    await request(app.getHttpServer()).post('/api/v1/auth/register').send({}).expect(404);
+    await request(app.getHttpServer()).get('/api/v1/tickets')
+      .set('Cookie', 'it_helpdesk_session=test-token').expect(403);
+    await request(app.getHttpServer()).get('/api/v1/tickets/ticket-id')
+      .set('Cookie', 'it_helpdesk_session=test-token').expect(403);
+  });
+
   afterEach(async () => {
     vi.restoreAllMocks();
     await app.close();

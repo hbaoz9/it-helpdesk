@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -33,12 +34,8 @@ export class TicketsService {
   }
 
   async findAll(user: AuthenticatedUser, query: TicketQueryDto) {
-    const where: Prisma.TicketWhereInput = {};
-    if (user.roles.includes('REQUESTER') && !this.hasInternalRole(user)) {
-      where.requesterId = user.id;
-    } else if (user.roles.includes('TECHNICIAN') && !this.hasManagerRole(user)) {
-      where.assigneeId = user.id;
-    }
+    this.requireTicketRole(user);
+    const where: Prisma.TicketWhereInput = { AND: [this.accessScope(user)] };
 
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.status) where.status = query.status as TicketStatus;
@@ -65,12 +62,8 @@ export class TicketsService {
   }
 
   async findById(user: AuthenticatedUser, id: string) {
-    const where: Prisma.TicketWhereInput = { id };
-    if (user.roles.includes('REQUESTER') && !this.hasInternalRole(user)) {
-      where.requesterId = user.id;
-    } else if (user.roles.includes('TECHNICIAN') && !this.hasManagerRole(user)) {
-      where.assigneeId = user.id;
-    }
+    this.requireTicketRole(user);
+    const where: Prisma.TicketWhereInput = { id, AND: [this.accessScope(user)] };
 
     const ticket = await this.prisma.ticket.findFirst({
       where,
@@ -87,6 +80,9 @@ export class TicketsService {
   }
 
   async create(user: AuthenticatedUser, dto: CreateTicketDto) {
+    if (!user.roles.includes('REQUESTER')) {
+      throw new ForbiddenException('Ticket creation requires REQUESTER role');
+    }
     const category = await this.prisma.category.findFirst({
       where: { id: dto.categoryId, active: true },
       select: { id: true },
@@ -134,13 +130,19 @@ export class TicketsService {
     return matrix[impact][urgency];
   }
 
-  private hasManagerRole(user: AuthenticatedUser): boolean {
-    return user.roles.includes('SUPERVISOR') || user.roles.includes('ADMIN');
+  private accessScope(user: AuthenticatedUser): Prisma.TicketWhereInput {
+    if (user.roles.includes('SUPERVISOR')) return {};
+    const scopes: Prisma.TicketWhereInput[] = [];
+    if (user.roles.includes('REQUESTER')) scopes.push({ requesterId: user.id });
+    if (user.roles.includes('TECHNICIAN')) scopes.push({ assigneeId: user.id });
+    return scopes.length === 1 ? scopes[0] : { OR: scopes };
   }
 
-  private hasInternalRole(user: AuthenticatedUser): boolean {
-    return user.roles.some((role) =>
-      ['TECHNICIAN', 'SUPERVISOR', 'ADMIN'].includes(role),
-    );
+  private requireTicketRole(user: AuthenticatedUser): void {
+    if (!user.roles.some((role) =>
+      ['REQUESTER', 'TECHNICIAN', 'SUPERVISOR'].includes(role),
+    )) {
+      throw new ForbiddenException('Ticket access requires a Ticket role');
+    }
   }
 }

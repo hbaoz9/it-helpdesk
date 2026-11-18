@@ -1,0 +1,84 @@
+import { useEffect, useState } from 'react';
+import { Alert, Spin } from 'antd';
+import { getTickets } from '../../shared/api/tickets';
+import type { TicketRecord } from '../../shared/api/types';
+import TicketTable from '../../shared/components/tickets/TicketTable';
+import { toTicketRow } from '../../shared/components/tickets/ticketAdapter';
+import '../../styles/InternalWorkspace.css';
+
+const AssignmentManagementPage = () => {
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getTickets()
+      .then((result) => {
+        if (active) setTickets(result);
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : 'Không tải được Ticket');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const unassignedTickets = tickets
+    .filter((ticket) => !ticket.assignee)
+    .map(toTicketRow);
+  const assignedTickets = tickets
+    .filter((ticket) => ticket.assignee)
+    .map(toTicketRow);
+
+  return (
+    <div className="iw-stack">
+      {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
+      {loading ? (
+        <Spin />
+      ) : !error ? (
+        <>
+      <div className="iw-card">
+        <div className="iw-card-header">
+          <div>
+            <h2 className="iw-card-title">
+              Ticket chưa phân công
+            </h2>
+            <p className="iw-card-subtitle">
+              Các yêu cầu đang chờ người phụ trách.
+            </p>
+          </div>
+        </div>
+
+        <TicketTable
+          tickets={unassignedTickets}
+          emptyText="Không có Ticket chưa phân công"
+        />
+      </div>
+
+      <div className="iw-card">
+        <div className="iw-card-header">
+          <div>
+            <h2 className="iw-card-title">Ticket đã phân công</h2>
+            <p className="iw-card-subtitle">
+              Theo dõi Ticket đã giao cho Technician
+            </p>
+          </div>
+        </div>
+
+        <TicketTable
+          tickets={assignedTickets}
+          emptyText="Không có Ticket đã phân công"
+        />
+      </div>
+        </>
+      ) : null}
+    </div>
+  );
+};
+
+export default AssignmentManagementPage;

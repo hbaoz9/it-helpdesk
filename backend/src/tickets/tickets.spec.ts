@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CategoriesService } from '../categories/categories.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -131,5 +131,53 @@ describe('TicketsModule', () => {
         BadRequestException,
       );
     });
+  });
+
+  it('denies ADMIN-only Ticket reads before querying data', async () => {
+    const admin = {
+      id: 'admin-id', email: 'admin@example.com', fullName: 'Admin',
+      roles: ['ADMIN' as const],
+    };
+    await expect(ticketsService.findAll(admin, TicketQueryDto.validate({}))).rejects.toThrow(ForbiddenException);
+    await expect(ticketsService.findById(admin, 'ticket-id')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('combines only assigned and owned Ticket access for REQUESTER + TECHNICIAN', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    prismaMock.ticket = { findMany } as unknown as PrismaService['ticket'];
+    const user = {
+      id: 'multi-id', email: 'multi@example.com', fullName: 'Multi',
+      roles: ['REQUESTER', 'TECHNICIAN', 'ADMIN'] as ('REQUESTER' | 'TECHNICIAN' | 'ADMIN')[],
+    };
+    await ticketsService.findAll(user, TicketQueryDto.validate({ search: 'printer' }));
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        AND: [{ OR: [{ requesterId: user.id }, { assigneeId: user.id }] }],
+        OR: [
+          { code: { contains: 'printer' } },
+          { title: { contains: 'printer' } },
+          { description: { contains: 'printer' } },
+        ],
+      },
+    }));
+  });
+
+  it('keeps Requester Ticket creation and priority calculation available', async () => {
+    const categoryId = '10000000-0000-4000-8000-000000000001';
+    const create = vi.fn().mockResolvedValue({ code: 'INC-TEST' });
+    prismaMock.category = { findFirst: vi.fn().mockResolvedValue({ id: categoryId }) } as unknown as PrismaService['category'];
+    prismaMock.ticket = { create } as unknown as PrismaService['ticket'];
+    const requester = {
+      id: 'requester-id', email: 'requester@example.com', fullName: 'Requester',
+      roles: ['REQUESTER' as const],
+    };
+    const dto = CreateTicketDto.validate({
+      title: 'Cannot connect to office Wi-Fi', description: 'Office Wi-Fi has been unavailable since morning',
+      categoryId, impact: 'HIGH', urgency: 'HIGH',
+    });
+    await expect(ticketsService.create(requester, dto)).resolves.toEqual({ code: 'INC-TEST' });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ requesterId: requester.id, priority: 'P1' }),
+    }));
   });
 });

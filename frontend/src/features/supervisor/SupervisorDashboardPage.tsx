@@ -1,0 +1,49 @@
+import { useEffect, useState } from 'react';
+import { Alert, Spin } from 'antd';
+import { getTickets } from '../../shared/api/tickets';
+import type { TicketRecord } from '../../shared/api/types';
+import TicketTable from '../../shared/components/tickets/TicketTable';
+import { toTicketRow } from '../../shared/components/tickets/ticketAdapter';
+import '../../styles/InternalWorkspace.css';
+
+const SupervisorDashboardPage = () => {
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getTickets()
+      .then((result) => {
+        if (active) setTickets(result);
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : 'Không tải được Ticket');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <div className="iw-stack">
+      <div className="iw-card">
+        <div className="iw-card-header">
+          <div>
+            <h2 className="iw-card-title">Tổng quan Ticket</h2>
+            <p className="iw-card-subtitle">
+              Theo dõi các yêu cầu hỗ trợ trong hệ thống.
+            </p>
+          </div>
+        </div>
+        {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
+        {loading ? <Spin /> : !error ? <TicketTable tickets={tickets.map(toTicketRow)} emptyText="Chưa có Ticket nào." /> : null}
+      </div>
+    </div>
+  );
+};
+
+export default SupervisorDashboardPage;
