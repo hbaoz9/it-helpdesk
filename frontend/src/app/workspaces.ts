@@ -15,6 +15,7 @@ export const homePath = (roles: RoleCode[]): string =>
     .find(({ role }) => roles.includes(role))?.path ?? '/login';
 
 export const menu = [
+  { path: '/requester/ai', label: 'Trợ lý AI', workspace: 'requester' },
   { path: '/requester', label: 'Trang chủ', workspace: 'requester' },
   { path: '/requester/tickets', label: 'Yêu cầu của tôi', workspace: 'requester' },
   { path: '/requester/tickets/new', label: 'Tạo yêu cầu', workspace: 'requester' },

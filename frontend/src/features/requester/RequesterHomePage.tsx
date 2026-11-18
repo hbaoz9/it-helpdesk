@@ -24,7 +24,7 @@ export default function RequesterHomePage() {
   return <div className="requester-page">
     <div className="requester-heading"><div><Typography.Title level={2}>Xin chào, bạn cần hỗ trợ gì?</Typography.Title><Typography.Text type="secondary">Gửi yêu cầu và theo dõi tiến độ hỗ trợ IT tại một nơi.</Typography.Text></div><Button type="primary" icon={<FileAddOutlined />} onClick={() => navigate('/requester/tickets/new')}>Tạo yêu cầu</Button></div>
     <Card className="requester-hero">
-      <div><span className="requester-eyebrow">SMARTDESK AI SUPPORT</span><Typography.Title level={2}>Gặp sự cố IT? SmartDesk luôn sẵn sàng hỗ trợ.</Typography.Title><Typography.Paragraph>Trợ lý AI đang được phát triển. Bạn có thể tạo yêu cầu ngay để bộ phận IT tiếp nhận.</Typography.Paragraph><Button onClick={() => navigate('/requester/tickets/new')}>Tạo yêu cầu hỗ trợ <ArrowRightOutlined /></Button></div><RobotOutlined className="requester-hero-icon" />
+      <div><span className="requester-eyebrow">SMARTDESK AI SUPPORT</span><Typography.Title level={2}>Gặp sự cố IT? SmartDesk luôn sẵn sàng hỗ trợ.</Typography.Title><Typography.Paragraph>Mô tả sự cố để AI gợi ý các bước kiểm tra ban đầu, rồi tạo yêu cầu nếu vẫn cần bộ phận IT hỗ trợ.</Typography.Paragraph><Button onClick={() => navigate('/requester/ai')}>Nhờ AI hỗ trợ <ArrowRightOutlined /></Button></div><RobotOutlined className="requester-hero-icon" />
     </Card>
     {!loading && !error && <Row gutter={[16, 16]} className="requester-stats">
       <Col xs={24} sm={8}><Card><Statistic title="Tất cả yêu cầu" value={tickets.length} /></Card></Col>

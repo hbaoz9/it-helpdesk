@@ -1,0 +1,10 @@
+.ai-page { max-width: 1040px; }
+.ai-eyebrow { color: #235ee8; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+.ai-heading-icon { color: #235ee8; font-size: 42px; }
+.ai-result { display: flex; width: 100%; }
+.ai-result h4.ant-typography { margin-bottom: 8px; color: #172b4d; }
+.ai-result .ant-list-item { display: flex; justify-content: flex-start; align-items: flex-start; gap: 12px; }
+.ai-step-number { flex: 0 0 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: #e9f0ff; color: #235ee8; font-weight: 700; }
+.ai-ticket-preview { padding: 18px; border: 1px solid #e4ebf5; border-radius: 12px; background: #f8faff; }
+.ai-ticket-preview .ant-typography:last-child { margin-bottom: 0; white-space: pre-wrap; }
+@media (max-width: 600px) { .ai-heading-icon { display: none; } .ai-result .ant-btn { white-space: normal; height: auto; min-height: 40px; } }

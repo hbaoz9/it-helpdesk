@@ -48,7 +48,7 @@ it-helpdesk/
 
 Frontend được tổ chức trong `src/app/` (router, providers, workspace menu),
 `src/shared/` (AppShell, AuthContext, API client, Ticket UI và types),
-`src/features/` (Requester, Technician, Supervisor, Administrator) và
+`src/features/` (AI, Requester, Technician, Supervisor, Administrator) và
 `src/pages/` (Landing Page công khai và Login chung). Xem [Frontend README](frontend/README.md) để biết
 route và trạng thái các workspace.
 
@@ -207,6 +207,14 @@ npm audit
 ```
 
 Các lệnh kiểm tra được chạy tại thư mục tương ứng.
+
+### AI Assistant (Requester)
+
+Sau khi chuẩn bị Backend, thêm `GEMINI_API_KEY` vào `backend/.env` theo `backend/.env.example`. `GEMINI_MODEL` không bắt buộc; mặc định là `gemini-3.8-flash`. Tạo key trong Google AI Studio và kiểm tra model được cấp quyền cho project. Giữ API key trên server, không đưa vào biến `VITE_*` hoặc commit Git. Khởi động lại Backend sau khi cấu hình.
+
+Requester đăng nhập, mở `/requester/ai`, nhập mô tả sự cố và chọn **Phân tích sự cố**. API `POST /api/v1/ai/assist` nhận `{ "description": "..." }` (20–2000 ký tự), trả `summary`, `quickChecks` (2–4 bước), `suggestedTitle`, `suggestedDescription`, `escalationAdvice`. Chọn **Tạo yêu cầu từ gợi ý** để mở bản nháp tại `/requester/tickets/new`; người dùng tự kiểm tra, sửa nội dung, chọn danh mục, mức ảnh hưởng và mức khẩn cấp rồi gửi qua Ticket API hiện có.
+
+Endpoint cần Session và role `REQUESTER`. Giới hạn 10 lượt mỗi người dùng trong một giờ trên mỗi tiến trình Backend; triển khai nhiều instance cần rate limiter dùng chung. Thiếu key, key/model không hợp lệ hoặc Gemini tạm ngừng trả 503; timeout trả 504; lỗi provider khác trả 502; hết quota hoặc vượt giới hạn trả 429. Không có kết quả AI giả khi provider chưa cấu hình. Có thể chạy test không cần key bằng `npm run test -- src/ai/ai.spec.ts` trong `backend/`. Demo live cần key hợp lệ, quota khả dụng và kết nối tới Gemini. Free Tier có giới hạn theo project và model; kiểm tra hạn mức hiện tại trong Google AI Studio.
 
 ## 7. Lỗi thường gặp
 
