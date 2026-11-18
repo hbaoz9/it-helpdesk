@@ -9,6 +9,13 @@ export interface AuthenticatedUser {
   roles: RoleCode[];
 }
 
+export interface AuthenticatedSession {
+  id: string;
+  expiresAt: Date;
+}
+
 export interface AuthenticatedRequest extends Request {
   user: AuthenticatedUser;
+  session?: AuthenticatedSession;
+  sessionToken?: string;
 }

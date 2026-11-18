@@ -63,11 +63,26 @@ model User {
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
   userRoles        UserRole[]
+  sessions         Session[]
   requestedTickets Ticket[]   @relation("TicketRequester")
   assignedTickets  Ticket[]   @relation("TicketAssignee")
 
   @@index([active])
   @@map("users")
+}
+
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
 }
 
 model Role {
