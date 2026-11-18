@@ -14,9 +14,9 @@ npx prisma migrate deploy --config prisma7.config.ts
 npm run start:dev
 ```
 
-The migration seeds the built-in roles and active ticket categories. New users
-can register as Requesters. Internal roles must be assigned by an administrator
-through the database; public registration cannot choose an internal role.
+The migrations seed built-in roles and active ticket categories. Test accounts
+are created with `npm run db:seed` on a disposable local database. Public account
+registration is disabled; accounts and roles are provisioned internally.
 
 ## API
 
@@ -25,7 +25,6 @@ HttpOnly, SameSite=Lax session cookie.
 
 | Method | Endpoint | Access |
 | --- | --- | --- |
-| `POST` | `/api/v1/auth/register` | Public; creates a Requester |
 | `POST` | `/api/v1/auth/login` | Public |
 | `POST` | `/api/v1/auth/logout` | Clears the session cookie |
 | `GET` | `/api/v1/auth/me` | Authenticated |
@@ -33,9 +32,20 @@ HttpOnly, SameSite=Lax session cookie.
 | `GET` | `/api/v1/tickets` | Authenticated; scope depends on role |
 | `POST` | `/api/v1/tickets` | Requester |
 | `GET` | `/api/v1/tickets/:id` | Authenticated; scope depends on role |
+| `GET` | `/api/v1/tickets/:id/activity` | Requester who owns the Ticket; public activity only |
+| `POST` | `/api/v1/tickets/:id/comments` | Requester who owns an open Ticket |
+| `POST` | `/api/v1/tickets/:id/close` | Requester who owns a resolved Ticket |
+| `POST` | `/api/v1/tickets/:id/reopen` | Requester who owns a resolved Ticket, within 72 hours |
 
 Requesters can only read their own tickets. Technicians can only read tickets
-assigned to them. Supervisors and Admins can read all tickets. Ticket priority
-is calculated by the backend from the submitted `impact` and `urgency`.
+assigned to them. Supervisors can read all tickets. ADMIN alone has no Ticket
+access. Ticket priority is calculated by the backend from `impact` and `urgency`.
 
-Assignment, comments, and ticket workflow transitions are not implemented yet.
+The Requester activity endpoint filters `visibility=PUBLIC`; internal notes are
+never returned to Requesters. Comment and close/reopen actions require the
+Ticket's current integer `version` in the JSON body to reject stale concurrent
+requests. Reopen also requires a `reason` (3–2000 characters). A Backend sweep
+automatically closes resolved Tickets 72 hours after `resolvedAt`, at startup
+and once per minute while the API runs. Assignment and Technician/Supervisor
+workflow transitions remain with their respective modules. Reopening returns an
+assigned Ticket to `ASSIGNED`, or an unassigned Ticket to `TRIAGED`.

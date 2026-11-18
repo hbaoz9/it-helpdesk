@@ -8,10 +8,16 @@
 .requester-hero .ant-typography:last-of-type { opacity: .88; }
 .requester-eyebrow { color: #bce7ff; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
 .requester-hero-icon { font-size: 130px; opacity: .13; }
-.requester-priority { font-size: 16px; padding: 6px 12px; margin-bottom: 18px; }
 .requester-loading { text-align: center; padding: 36px; }
-.requester-ticket-list { padding: 24px; background: #fff; }
-.requester-ticket-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; }
-.requester-ticket-header h2 { margin: 0 0 4px; font-size: 22px; color: #172b4d; }
-.requester-ticket-header p { margin: 0; color: #71809a; }
+.requester-eyebrow-text { color: #2563eb; font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.requester-code { color: #2563eb; }
+.requester-filters { margin-bottom: 18px; }
+.requester-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.requester-description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.requester-comments { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.requester-comment { padding: 14px 16px; border-radius: 12px; background: #f3f7fd; border: 1px solid #e5edf8; }
+.requester-comment .ant-typography { margin: 8px 0 0; }
+.requester-comment-form, .requester-reopen-form { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 18px; }
+.requester-deadline { margin-top: 18px; }
+.requester-action-alert { margin-bottom: 14px; }
 @media(max-width: 600px) { .requester-hero .ant-card-body { min-height: 0; padding: 24px; } .requester-hero-icon { display: none; } }

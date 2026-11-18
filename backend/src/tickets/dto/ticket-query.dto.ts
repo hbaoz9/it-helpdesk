@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 export class TicketQueryDto {
+  scope?: 'requested';
   categoryId?: string;
   status?: string;
   priority?: string;
@@ -19,6 +20,13 @@ export class TicketQueryDto {
 
     const record = input as Record<string, unknown>;
     const dto = new TicketQueryDto();
+
+    if (record.scope !== undefined) {
+      if (record.scope !== 'requested') {
+        throw new BadRequestException('Query parameter scope is invalid');
+      }
+      dto.scope = 'requested';
+    }
 
     if (record.categoryId !== undefined) {
       if (
