@@ -1,5 +1,4 @@
 import {
-  ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -8,11 +7,10 @@ import { scrypt as callbackScrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AuthenticatedUser, RoleCode } from './auth.types.js';
-import type { LoginDto, RegisterDto } from './dto/auth.dto.js';
+import type { LoginDto } from './dto/auth.dto.js';
 import { SessionService } from './session.service.js';
 
 const scrypt = promisify(callbackScrypt);
-const REQUESTER_ROLE = 'REQUESTER' as const;
 
 // Precomputed Argon2id hash to mitigate user-enumeration timing attacks
 const DUMMY_ARGON2ID_HASH =
@@ -24,60 +22,6 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly sessionService: SessionService,
   ) {}
-
-  async register(dto: RegisterDto): Promise<{
-    user: AuthenticatedUser;
-    token: string;
-    expiresAt: Date;
-  }> {
-    const passwordHash = await this.hashPassword(dto.password);
-    const role = await this.prisma.role.upsert({
-      where: { code: REQUESTER_ROLE },
-      create: {
-        code: REQUESTER_ROLE,
-        name: 'Requester',
-      },
-      update: {},
-    });
-
-    try {
-      const user = await this.prisma.user.create({
-        data: {
-          email: dto.email,
-          fullName: dto.fullName,
-          passwordHash,
-          userRoles: {
-            create: { roleId: role.id },
-          },
-        },
-        include: { userRoles: { include: { role: true } } },
-      });
-
-      const authenticatedUser = this.toAuthenticatedUser(user);
-      const session = await this.sessionService.createSession(
-        authenticatedUser.id,
-        false,
-      );
-
-      return {
-        user: authenticatedUser,
-        token: session.rawToken,
-        expiresAt: session.expiresAt,
-      };
-    } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        error.code === 'P2002'
-      ) {
-        throw new ConflictException(
-          'An account with this email already exists',
-        );
-      }
-      throw error;
-    }
-  }
 
   async login(dto: LoginDto): Promise<{
     user: AuthenticatedUser;

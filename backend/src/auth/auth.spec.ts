@@ -12,7 +12,7 @@ import { AuthController } from './auth.controller.js';
 import { AuthGuard, SESSION_COOKIE } from './auth.guard.js';
 import { AuthService } from './auth.service.js';
 import type { AuthenticatedRequest, RoleCode } from './auth.types.js';
-import { LoginDto, RegisterDto } from './dto/auth.dto.js';
+import { LoginDto } from './dto/auth.dto.js';
 import { RolesGuard } from './roles.guard.js';
 import { SessionService } from './session.service.js';
 
@@ -216,17 +216,10 @@ describe('AuthModule (Session, Argon2id & RBAC)', () => {
       expect(dto.remember).toBe(true);
     });
 
-    it('rejects invalid LoginDto and RegisterDto payloads', () => {
+    it('rejects invalid LoginDto payloads', () => {
       expect(() => LoginDto.validate(null)).toThrow(BadRequestException);
       expect(() =>
         LoginDto.validate({ email: 'not-an-email', password: '123' }),
-      ).toThrow(BadRequestException);
-      expect(() =>
-        RegisterDto.validate({
-          fullName: 'Test User',
-          email: 'user@uth.edu.vn',
-          password: 'short',
-        }),
       ).toThrow(BadRequestException);
     });
   });

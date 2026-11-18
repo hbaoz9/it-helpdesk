@@ -21,7 +21,7 @@ import { TicketsService } from './tickets.service.js';
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
-  @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR', 'ADMIN')
+  @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR')
   @Get()
   findAll(
     @Req() request: AuthenticatedRequest,
@@ -42,7 +42,7 @@ export class TicketsController {
     );
   }
 
-  @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR', 'ADMIN')
+  @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR')
   @Get(':id')
   findById(
     @Req() request: AuthenticatedRequest,

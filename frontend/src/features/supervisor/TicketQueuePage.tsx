@@ -48,12 +48,12 @@ const TicketQueuePage = () => {
       {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
       {loading ? (
         <Spin />
-      ) : (
+      ) : !error ? (
         <TicketTable
           tickets={queueTickets}
           emptyText="Không có Ticket trong hàng đợi"
         />
-      )}
+      ) : null}
     </div>
   );
 };

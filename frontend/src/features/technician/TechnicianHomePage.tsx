@@ -55,7 +55,7 @@ export default function TechnicianHomePage() {
       {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
       {loading ? (
         <Spin />
-      ) : (
+      ) : !error ? (
         <>
           <Row gutter={[16, 16]}>
             {stats.map((stat) => (
@@ -95,7 +95,7 @@ export default function TechnicianHomePage() {
             />
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

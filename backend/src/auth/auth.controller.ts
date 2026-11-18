@@ -15,7 +15,7 @@ import {
   SESSION_COOKIE,
 } from './auth.guard.js';
 import type { AuthenticatedRequest } from './auth.types.js';
-import { LoginDto, RegisterDto } from './dto/auth.dto.js';
+import { LoginDto } from './dto/auth.dto.js';
 
 const cookieOptions = {
   httpOnly: true,
@@ -28,20 +28,6 @@ const cookieOptions = {
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
-  @Post('register')
-  async register(
-    @Body() input: unknown,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const result = await this.authService.register(RegisterDto.validate(input));
-    const maxAge = Math.max(0, result.expiresAt.getTime() - Date.now());
-    response.cookie(SESSION_COOKIE, result.token, {
-      ...cookieOptions,
-      maxAge,
-    });
-    return { user: result.user };
-  }
 
   @Post('login')
   async login(

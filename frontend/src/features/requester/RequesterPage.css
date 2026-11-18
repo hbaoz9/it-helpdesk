@@ -1,0 +1,17 @@
+.requester-page { display: flex; flex-direction: column; gap: 20px; max-width: 1320px; margin: 0 auto; }
+.requester-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.requester-heading .ant-typography { margin: 0 0 6px; }
+.requester-card, .requester-stats .ant-card { border: 1px solid #e4ebf5; box-shadow: 0 8px 24px rgba(24, 50, 95, .04); border-radius: 16px; }
+.requester-hero { border: 0; border-radius: 18px; background: linear-gradient(115deg,#137dbb,#1944a8 65%,#102b70); color: white; overflow: hidden; }
+.requester-hero .ant-card-body { min-height: 225px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px; }
+.requester-hero .ant-typography { color: white; max-width: 640px; }
+.requester-hero .ant-typography:last-of-type { opacity: .88; }
+.requester-eyebrow { color: #bce7ff; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+.requester-hero-icon { font-size: 130px; opacity: .13; }
+.requester-priority { font-size: 16px; padding: 6px 12px; margin-bottom: 18px; }
+.requester-loading { text-align: center; padding: 36px; }
+.requester-ticket-list { padding: 24px; background: #fff; }
+.requester-ticket-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; }
+.requester-ticket-header h2 { margin: 0 0 4px; font-size: 22px; color: #172b4d; }
+.requester-ticket-header p { margin: 0; color: #71809a; }
+@media(max-width: 600px) { .requester-hero .ant-card-body { min-height: 0; padding: 24px; } .requester-hero-icon { display: none; } }

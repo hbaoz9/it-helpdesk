@@ -11,7 +11,6 @@ import {
   getCurrentUser,
   login as loginRequest,
   logout as logoutRequest,
-  register as registerRequest,
 } from '../api/auth';
 import type { AuthUser } from '../api/types';
 
@@ -45,22 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const authenticatedUser = await loginRequest(email, password);
+  const login = useCallback(async (email: string, password: string, remember = false) => {
+    const authenticatedUser = await loginRequest(email, password, remember);
     setUser(authenticatedUser);
     setLoadError(null);
     return authenticatedUser;
   }, []);
-
-  const register = useCallback(
-    async (fullName: string, email: string, password: string) => {
-      const authenticatedUser = await registerRequest(fullName, email, password);
-      setUser(authenticatedUser);
-      setLoadError(null);
-      return authenticatedUser;
-    },
-    [],
-  );
 
   const logout = useCallback(async () => {
     await logoutRequest();
@@ -68,8 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, loadError, login, register, logout }),
-    [user, loading, loadError, login, register, logout],
+    () => ({ user, loading, loadError, login, logout }),
+    [user, loading, loadError, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

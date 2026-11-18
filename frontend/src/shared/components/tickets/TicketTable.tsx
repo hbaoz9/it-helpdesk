@@ -1,4 +1,4 @@
-import { Button, Table } from 'antd';
+import { Button, Empty, Table } from 'antd';
 import type { TableProps } from 'antd';
 import type { Ticket } from '../../types/ticket';
 import TicketStatusTag from './TicketStatusTag';
@@ -96,8 +96,8 @@ export default function TicketTable({
       columns={columns}
       dataSource={tickets}
       pagination={{ pageSize: 5, showSizeChanger: false }}
-      scroll={{ x: 1210 }}
-      locale={{ emptyText }}
+      scroll={{ x: 900 }}
+      locale={{ emptyText: <Empty description={emptyText} /> }}
     />
   );
 }

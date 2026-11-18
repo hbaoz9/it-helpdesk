@@ -10,7 +10,6 @@ import { STATUS_METADATA } from '../../shared/components/tickets/ticketMetadata'
 import { INTERNAL_PATHS } from '../../layouts/internalPaths';
 import '../../styles/InternalWorkspace.css';
 
-// Nhãn lọc giống Requester Portal: "NEW – Mới tạo".
 const STATUS_FILTER_OPTIONS: { value: 'ALL' | TicketStatus; label: string }[] =
   [
     { value: 'ALL', label: 'Tất cả trạng thái' },
@@ -20,7 +19,6 @@ const STATUS_FILTER_OPTIONS: { value: 'ALL' | TicketStatus; label: string }[] =
     })),
   ];
 
-// Đặt ngoài component để không bị tính lại mỗi lần render.
 export default function AssignedTicketsPage() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
@@ -65,7 +63,7 @@ export default function AssignedTicketsPage() {
             Danh sách Ticket được phân công
           </h2>
           <p className="iw-card-subtitle">
-            Lọc theo trạng thái chuẩn trong API Contract
+            Chọn trạng thái để tìm công việc cần xử lý.
           </p>
         </div>
       </div>
@@ -85,14 +83,15 @@ export default function AssignedTicketsPage() {
       {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
       {loading ? (
         <Spin />
-      ) : (
+      ) : !error ? (
         <TicketTable
           tickets={filteredTickets}
+          emptyText="Không có Ticket phù hợp với bộ lọc."
           onViewDetail={(ticket) =>
             navigate(INTERNAL_PATHS.technicianTicketDetail(ticket.id))
           }
         />
-      )}
+      ) : null}
     </div>
   );
 }

@@ -38,7 +38,7 @@ const SupervisorHomePage = () => {
       {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
       {loading ? (
         <Spin />
-      ) : (
+      ) : !error ? (
         <Row gutter={[16, 16]}>
           {overviewItems.map((item) => (
             <Col key={item.label} xs={24} sm={12} lg={6}>
@@ -51,7 +51,7 @@ const SupervisorHomePage = () => {
             </Col>
           ))}
         </Row>
-      )}
+      ) : null}
     </div>
   );
 };

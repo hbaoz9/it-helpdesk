@@ -40,7 +40,7 @@ const AssignmentManagementPage = () => {
       {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
       {loading ? (
         <Spin />
-      ) : (
+      ) : !error ? (
         <>
       <div className="iw-card">
         <div className="iw-card-header">
@@ -49,7 +49,7 @@ const AssignmentManagementPage = () => {
               Ticket chưa phân công
             </h2>
             <p className="iw-card-subtitle">
-              Thao tác phân công thật sẽ được triển khai ở các Tuần sau
+              Các yêu cầu đang chờ người phụ trách.
             </p>
           </div>
         </div>
@@ -76,7 +76,7 @@ const AssignmentManagementPage = () => {
         />
       </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 };

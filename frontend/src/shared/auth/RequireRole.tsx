@@ -1,6 +1,6 @@
-import { Alert, Spin } from 'antd';
+import { Alert, Button, Result, Spin } from 'antd';
 import type { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import type { RoleCode } from '../api/types';
 import { homePath } from '../../app/workspaces';
 import { useAuth } from './useAuth';
@@ -12,6 +12,7 @@ export default function RequireRole({
   roles: RoleCode[];
   children: ReactNode;
 }) {
+  const navigate = useNavigate();
   const { user, loading, loadError } = useAuth();
 
   if (loading) return <Spin fullscreen />;
@@ -20,7 +21,7 @@ export default function RequireRole({
   }
   if (!user) return <Navigate to="/login" replace />;
   if (!user.roles.some((role) => roles.includes(role))) {
-    return <Navigate to={homePath(user.roles)} replace />;
+    return <Result status="403" title="Không có quyền truy cập" subTitle="Tài khoản của bạn chưa được cấp quyền vào khu vực này." extra={<Button type="primary" onClick={() => navigate(homePath(user.roles))}>Về workspace của tôi</Button>} />;
   }
   return children;
 }

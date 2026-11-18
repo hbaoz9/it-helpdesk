@@ -49,7 +49,7 @@ it-helpdesk/
 Frontend được tổ chức trong `src/app/` (router, providers, workspace menu),
 `src/shared/` (AppShell, AuthContext, API client, Ticket UI và types),
 `src/features/` (Requester, Technician, Supervisor, Administrator) và
-`src/pages/` (Login chung). Xem [Frontend README](frontend/README.md) để biết
+`src/pages/` (Landing Page công khai và Login chung). Xem [Frontend README](frontend/README.md) để biết
 route và trạng thái các workspace.
 
 ## 4. Cài đặt lần đầu
@@ -148,7 +148,7 @@ cd ..
 ```
 
 Prisma Client được sinh từ schema và không commit vào Git.
-Migration cũng tạo các role và danh mục mặc định để đăng ký và tạo Ticket.
+Migration cũng tạo các role và danh mục mặc định để tạo Ticket.
 `AUTH_SESSION_SECRET` được tạo cùng file `backend/.env`; không chia sẻ giá trị này.
 
 Sau lần clone đầu tiên, cũng cần chạy `prisma generate` mỗi khi schema thay đổi.
@@ -176,7 +176,7 @@ npm run start:dev
 Frontend gọi API qua Vite proxy `/api` tới backend tại cổng 3000.
 Backend API có prefix `/api/v1` (ví dụ `GET http://localhost:3000/api/v1/health`).
 
-Đăng ký Requester tại trang đăng nhập; Technician/Supervisor/Admin cần được cấp role trong database.
+Trang `/` giới thiệu SmartDesk; đăng nhập tại `/login`. Không có đăng ký công khai. Tài khoản và vai trò do nhóm quản trị cấp nội bộ. Để tạo bốn tài khoản thử nghiệm trên database local đã chuẩn bị, chạy `npm run db:seed` trong `backend/` (không chạy trên dữ liệu cần giữ). Các tài khoản seed là `requester@helpdesk.local`, `technician@helpdesk.local`, `supervisor@helpdesk.local`, `admin@helpdesk.local`; mật khẩu mặc định `Helpdesk@LocalTest123` hoặc giá trị `SEED_TEST_PASSWORD` đã cấu hình. Đổi mật khẩu khi dùng ngoài môi trường local.
 
 Nhấn `Ctrl + C` để dừng từng server.
 
@@ -196,8 +196,8 @@ Backend:
 cd backend
 npm run lint
 npm run build
-npm run test
-npm run test:e2e
+npm run test -- src/auth/auth.spec.ts src/tickets/tickets.spec.ts
+npm run test:e2e -- test/app.e2e-spec.ts
 ```
 
 Kiểm tra dependencies:

@@ -35,12 +35,12 @@ const SupervisorDashboardPage = () => {
           <div>
             <h2 className="iw-card-title">Tổng quan Ticket</h2>
             <p className="iw-card-subtitle">
-              Ticket được tải trực tiếp từ Backend.
+              Theo dõi các yêu cầu hỗ trợ trong hệ thống.
             </p>
           </div>
         </div>
         {error && <Alert type="error" showIcon message="Không tải được Ticket" description={error} />}
-        {loading ? <Spin /> : <TicketTable tickets={tickets.map(toTicketRow)} />}
+        {loading ? <Spin /> : !error ? <TicketTable tickets={tickets.map(toTicketRow)} emptyText="Chưa có Ticket nào." /> : null}
       </div>
     </div>
   );

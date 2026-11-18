@@ -187,21 +187,15 @@ function MyTicketsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <div className="rp-card rp-dark-form">
-        <div className="rp-card-header">
+      <div className="requester-card requester-ticket-list">
+        <div className="requester-ticket-header">
           <div>
-            <h2 className="rp-card-title">Danh sách Ticket của tôi</h2>
-            <p className="rp-card-subtitle">
+            <h2>Yêu cầu của tôi</h2>
+            <p>
               Dữ liệu được lọc theo tài khoản đang đăng nhập.
             </p>
           </div>
-          <button
-            type="button"
-            className="rp-btn-primary"
-            onClick={() => navigate("/requester/tickets/new")}
-          >
-            + Tạo yêu cầu hỗ trợ
-          </button>
+          <Button type="primary" onClick={() => navigate("/requester/tickets/new")}>Tạo yêu cầu hỗ trợ</Button>
         </div>
 
         <Row gutter={[12, 12]} style={{ marginBottom: 18 }}>
@@ -252,7 +246,7 @@ function MyTicketsPage() {
             pagination={{ pageSize: 5, showSizeChanger: false }}
             locale={{
               emptyText: (
-                <Empty description="Không có Ticket nào khớp với bộ lọc." />
+                <Empty description="Chưa có yêu cầu phù hợp."><Button type="primary" onClick={() => navigate('/requester/tickets/new')}>Tạo yêu cầu</Button></Empty>
               ),
             }}
           />
@@ -296,9 +290,6 @@ function MyTicketsPage() {
                 <Tag color={PRIORITY_METADATA[selectedTicket.priority].color}>
                   {PRIORITY_METADATA[selectedTicket.priority].label}
                 </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Phiên bản dữ liệu">
-                <code>v{selectedTicket.version}</code>
               </Descriptions.Item>
               <Descriptions.Item label="Kỹ thuật viên" span={2}>
                 {selectedTicket.assignee?.fullName ?? "Chưa phân công"}

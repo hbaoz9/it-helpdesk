@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import RequireRole from '../shared/auth/RequireRole';
 import AppShell from '../shared/layout/AppShell';
 import LoginPage from '../pages/LoginPage';
+import LandingPage from '../pages/LandingPage';
 import RequesterHomePage from '../features/requester/RequesterHomePage';
 import MyTicketsPage from '../features/requester/MyTicketsPage';
 import CreateTicketPage from '../features/requester/CreateTicketPage';
@@ -24,6 +25,7 @@ function EntryRoute() {
 
 export default function AppRouter() {
   return <BrowserRouter><Routes>
+    <Route path="/" element={<LandingPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/requester" element={<RequireRole roles={['REQUESTER']}><AppShell workspace="requester" /></RequireRole>}>
       <Route index element={<RequesterHomePage />} />
@@ -35,7 +37,7 @@ export default function AppRouter() {
       <Route path="tickets" element={<AssignedTicketsPage />} />
       <Route path="tickets/:id" element={<TicketDetailPage />} />
     </Route>
-    <Route path="/supervisor" element={<RequireRole roles={['SUPERVISOR', 'ADMIN']}><AppShell workspace="supervisor" /></RequireRole>}>
+    <Route path="/supervisor" element={<RequireRole roles={['SUPERVISOR']}><AppShell workspace="supervisor" /></RequireRole>}>
       <Route index element={<SupervisorHomePage />} />
       <Route path="queue" element={<TicketQueuePage />} />
       <Route path="assignments" element={<AssignmentManagementPage />} />

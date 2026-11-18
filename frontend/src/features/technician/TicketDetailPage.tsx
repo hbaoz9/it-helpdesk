@@ -76,7 +76,7 @@ export default function TicketDetailPage() {
         <div className="iw-card-header">
           <div>
             <h2 className="iw-card-title">{ticket.code}</h2>
-            <p className="iw-card-subtitle">Thông tin từ Backend</p>
+            <p className="iw-card-subtitle">Chi tiết yêu cầu hỗ trợ</p>
           </div>
           <div className="iw-card-actions">
             <TicketStatusTag status={ticket.status} />
@@ -104,10 +104,10 @@ export default function TicketDetailPage() {
           <Descriptions.Item label="Người xử lý">
             {ticket.assignee?.fullName ?? 'Chưa phân công'}
           </Descriptions.Item>
-          <Descriptions.Item label="Impact">
+          <Descriptions.Item label="Mức độ ảnh hưởng">
             {ticket.impact}
           </Descriptions.Item>
-          <Descriptions.Item label="Urgency">
+          <Descriptions.Item label="Mức độ khẩn cấp">
             {ticket.urgency}
           </Descriptions.Item>
           <Descriptions.Item label="Thời điểm tạo">

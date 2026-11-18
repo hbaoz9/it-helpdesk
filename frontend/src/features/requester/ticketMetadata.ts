@@ -38,7 +38,7 @@ export const STATUS_METADATA: Record<
     label: 'RESOLVED · Đã giải quyết',
     color: 'success',
     description:
-      'Kỹ thuật viên đã hoàn tất xử lý. Vui lòng xác nhận đóng hoặc mở lại trong 72 giờ.',
+      'Kỹ thuật viên đã hoàn tất xử lý yêu cầu.',
   },
   CLOSED: {
     label: 'CLOSED · Đã đóng',
@@ -57,33 +57,23 @@ export const PRIORITY_METADATA: Record<
   {
     label: string;
     color: string;
-    responseSla: string;
-    resolutionSla: string;
   }
 > = {
   P1: {
     label: 'P1 – Critical',
     color: 'red',
-    responseSla: '15 phút',
-    resolutionSla: '4 giờ',
   },
   P2: {
     label: 'P2 – High',
     color: 'volcano',
-    responseSla: '1 giờ',
-    resolutionSla: '8 giờ',
   },
   P3: {
     label: 'P3 – Medium',
     color: 'gold',
-    responseSla: '4 giờ',
-    resolutionSla: '24 giờ',
   },
   P4: {
     label: 'P4 – Low',
     color: 'green',
-    responseSla: '8 giờ',
-    resolutionSla: '72 giờ',
   },
 };
 
