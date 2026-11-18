@@ -18,9 +18,9 @@ import {
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ApiError } from "../../api/client";
-import { getTickets } from "../../api/tickets";
-import type { TicketRecord, TicketStatus } from "../../api/types";
+import { ApiError } from "../../shared/api/client";
+import { getTickets } from "../../shared/api/tickets";
+import type { TicketRecord, TicketStatus } from "../../shared/api/types";
 import {
   PRIORITY_METADATA,
   STATUS_METADATA,
@@ -111,7 +111,7 @@ function MyTicketsPage() {
       key: "code",
       width: 150,
       render: (code: string) => (
-        <Typography.Text strong style={{ color: "#38bdf8" }}>
+        <Typography.Text strong style={{ color: "#2563eb" }}>
           {code}
         </Typography.Text>
       ),
@@ -122,7 +122,7 @@ function MyTicketsPage() {
       key: "title",
       render: (title: string, record) => (
         <div>
-          <div style={{ fontWeight: 600, color: "#f8fafc" }}>{title}</div>
+          <div style={{ fontWeight: 600, color: "#172b4d" }}>{title}</div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {record.category.name}
           </Typography.Text>
@@ -278,7 +278,7 @@ function MyTicketsPage() {
             </Typography.Title>
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="Mã Ticket">
-                <strong style={{ color: "#38bdf8" }}>{selectedTicket.code}</strong>
+                <strong style={{ color: "#2563eb" }}>{selectedTicket.code}</strong>
               </Descriptions.Item>
               <Descriptions.Item label="Loại yêu cầu">
                 <Tag>{selectedTicket.type}</Tag>

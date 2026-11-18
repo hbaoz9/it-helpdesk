@@ -3,7 +3,7 @@ import type {
   TicketPriority,
   TicketStatus,
   UrgencyLevel,
-} from '../../api/types';
+} from '../../shared/api/types';
 
 export const STATUS_METADATA: Record<
   TicketStatus,

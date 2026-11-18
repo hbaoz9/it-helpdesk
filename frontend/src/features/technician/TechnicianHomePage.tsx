@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Alert, Col, Row, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { getTickets } from '../../api/tickets';
-import type { TicketRecord } from '../../api/types';
-import TicketTable from '../../components/tickets/TicketTable';
-import { toTicketRow } from '../../components/tickets/ticketAdapter';
+import { getTickets } from '../../shared/api/tickets';
+import type { TicketRecord } from '../../shared/api/types';
+import TicketTable from '../../shared/components/tickets/TicketTable';
+import { toTicketRow } from '../../shared/components/tickets/ticketAdapter';
 import { INTERNAL_PATHS } from '../../layouts/internalPaths';
 import '../../styles/InternalWorkspace.css';
 

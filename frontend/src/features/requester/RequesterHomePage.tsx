@@ -15,8 +15,8 @@ import {
   Spin,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { getTickets } from "../../api/tickets";
-import type { TicketRecord } from "../../api/types";
+import { getTickets } from "../../shared/api/tickets";
+import type { TicketRecord } from "../../shared/api/types";
 
 import {
   PRIORITY_METADATA,
@@ -66,7 +66,7 @@ function RequesterHomePage() {
       key: "code",
       width: 130,
       render: (code: string) => (
-        <Typography.Text strong style={{ color: "#38bdf8" }}>
+        <Typography.Text strong style={{ color: "#2563eb" }}>
           {code}
         </Typography.Text>
       ),
@@ -76,7 +76,7 @@ function RequesterHomePage() {
       dataIndex: "title",
       key: "title",
       render: (title: string) => (
-        <span style={{ color: "#f8fafc", fontWeight: 500 }}>{title}</span>
+        <span style={{ color: "#172b4d", fontWeight: 500 }}>{title}</span>
       ),
     },
     {
@@ -132,7 +132,7 @@ function RequesterHomePage() {
             <Statistic
               title="Tổng Ticket của tôi"
               value={totalCount}
-              valueStyle={{ color: "#f8fafc", fontWeight: 800 }}
+              valueStyle={{ color: "#172b4d", fontWeight: 800 }}
               suffix="yêu cầu"
             />
           </div>
@@ -143,7 +143,7 @@ function RequesterHomePage() {
             <Statistic
               title="Đang chờ / Đang xử lý"
               value={activeCount}
-              valueStyle={{ color: "#38bdf8", fontWeight: 800 }}
+              valueStyle={{ color: "#2563eb", fontWeight: 800 }}
               suffix="Ticket"
             />
           </div>

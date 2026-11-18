@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Alert, Descriptions, Spin } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getTicket } from '../../api/tickets';
-import type { TicketRecord } from '../../api/types';
-import TicketStatusTag from '../../components/tickets/TicketStatusTag';
-import TicketPriorityTag from '../../components/tickets/TicketPriorityTag';
+import { getTicket } from '../../shared/api/tickets';
+import type { TicketRecord } from '../../shared/api/types';
+import TicketStatusTag from '../../shared/components/tickets/TicketStatusTag';
+import TicketPriorityTag from '../../shared/components/tickets/TicketPriorityTag';
 import { INTERNAL_PATHS } from '../../layouts/internalPaths';
 import '../../styles/InternalWorkspace.css';
 

@@ -10,14 +10,14 @@ import {
   Tag,
   message,
 } from "antd";
-import { ApiError } from "../../api/client";
-import { createTicket, getCategories } from "../../api/tickets";
+import { ApiError } from "../../shared/api/client";
+import { createTicket, getCategories } from "../../shared/api/tickets";
 import type {
   Category,
   ImpactLevel,
   TicketPriority,
   UrgencyLevel,
-} from "../../api/types";
+} from "../../shared/api/types";
 
 import {
   PRIORITY_METADATA,

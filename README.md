@@ -1,4 +1,4 @@
-# IT Helpdesk Management System
+# SmartDesk (IT Helpdesk Management System)
 
 Dự án Học kỳ Doanh nghiệp — Nhóm 5
 Hệ thống quản lý yêu cầu hỗ trợ IT cho doanh nghiệp.
@@ -45,6 +45,12 @@ it-helpdesk/
 ├── .gitignore
 └── README.md
 ```
+
+Frontend được tổ chức trong `src/app/` (router, providers, workspace menu),
+`src/shared/` (AppShell, AuthContext, API client, Ticket UI và types),
+`src/features/` (Requester, Technician, Supervisor, Administrator) và
+`src/pages/` (Login chung). Xem [Frontend README](frontend/README.md) để biết
+route và trạng thái các workspace.
 
 ## 4. Cài đặt lần đầu
 

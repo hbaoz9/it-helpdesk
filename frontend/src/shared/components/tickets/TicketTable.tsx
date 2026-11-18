@@ -4,7 +4,6 @@ import type { Ticket } from '../../types/ticket';
 import TicketStatusTag from './TicketStatusTag';
 import TicketPriorityTag from './TicketPriorityTag';
 import { UNASSIGNED_ASSIGNEE } from './ticketMetadata';
-import '../../styles/InternalWorkspace.css';
 
 interface TicketTableProps {
   tickets: Ticket[];

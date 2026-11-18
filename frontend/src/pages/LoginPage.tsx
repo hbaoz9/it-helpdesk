@@ -11,8 +11,9 @@ import {
 } from "antd";
 
 import "./LoginPage.css";
-import { ApiError } from "../api/client";
-import { useAuth } from "../auth/useAuth";
+import { ApiError } from "../shared/api/client";
+import { useAuth } from "../shared/auth/useAuth";
+import { homePath } from "../app/workspaces";
 
 type AuthMode = "signin" | "signup" | "google-sso";
 
@@ -94,7 +95,7 @@ function LoginPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate(getHomePath(user.roles), { replace: true });
+      navigate(homePath(user.roles), { replace: true });
     }
   }, [loading, user, navigate]);
 
@@ -102,7 +103,7 @@ function LoginPage() {
     setSubmitting(true);
     try {
       const authenticatedUser = await login(values.email, values.password);
-      navigate(getHomePath(authenticatedUser.roles), { replace: true });
+      navigate(homePath(authenticatedUser.roles), { replace: true });
     } catch (error) {
       messageApi.error(
         error instanceof ApiError
@@ -122,7 +123,7 @@ function LoginPage() {
         values.email,
         values.password,
       );
-      navigate(getHomePath(authenticatedUser.roles), { replace: true });
+      navigate(homePath(authenticatedUser.roles), { replace: true });
     } catch (error) {
       messageApi.error(
         error instanceof ApiError
@@ -145,7 +146,7 @@ function LoginPage() {
 
   const handleSelectGoogleAccount = (email: string) => {
     messageApi.info(
-      `Google SSO chưa được cấu hình cho ${email}. Hãy đăng nhập bằng tài khoản IT Helpdesk.`,
+      `Google SSO chưa được cấu hình cho ${email}. Hãy đăng nhập bằng tài khoản SmartDesk.`,
     );
   };
 
@@ -172,7 +173,7 @@ function LoginPage() {
               <div className="sso-brand">
                 <div className="brand-logo">IT</div>
                 <div className="sso-brand-text">
-                  <span className="sso-brand-title">IT HELPDESK</span>
+                  <span className="sso-brand-title">SMARTDESK</span>
                   <span className="sso-brand-subtitle">Enterprise SSO</span>
                 </div>
               </div>
@@ -180,7 +181,7 @@ function LoginPage() {
               <h1 className="sso-heading">Chọn tài khoản</h1>
               <p className="sso-description">
                 Chọn tài khoản để tiếp tục truy cập{" "}
-                <span className="sso-highlight">IT Helpdesk.</span>
+                <span className="sso-highlight">SmartDesk.</span>
               </p>
             </div>
 
@@ -229,7 +230,7 @@ function LoginPage() {
             <div className="sso-policy-box">
               <p className="sso-policy-text">
                 Để tiếp tục, Google sẽ chia sẻ tên, địa chỉ email và ảnh hồ sơ
-                của bạn với IT Helpdesk.
+                của bạn với SmartDesk.
               </p>
               <div className="sso-policy-links">
                 <button
@@ -279,7 +280,7 @@ function LoginPage() {
             <div className="intro-content">
               <div className="brand">
                 <div className="brand-logo">IT</div>
-                <span className="brand-name">IT HELPDESK</span>
+                <span className="brand-name">SMARTDESK</span>
               </div>
 
               <div className="intro-main">
@@ -330,7 +331,7 @@ function LoginPage() {
           <section className="login-form-section">
             <div className="mobile-brand">
               <div className="brand-logo">IT</div>
-              <span className="brand-name">IT HELPDESK</span>
+              <span className="brand-name">SMARTDESK</span>
             </div>
 
             {authMode === "signin" ? (
@@ -451,7 +452,7 @@ function LoginPage() {
                   </span>
 
                   <span className="system-caption">
-                    IT Helpdesk Management System
+                    SmartDesk Management System
                   </span>
                 </div>
               </div>
@@ -637,7 +638,7 @@ function LoginPage() {
                   </span>
 
                   <span className="system-caption">
-                    IT Helpdesk Management System
+                    SmartDesk Management System
                   </span>
                 </div>
               </div>
@@ -648,7 +649,7 @@ function LoginPage() {
 
       {/* Quick switch between the connected sign-in and registration forms. */}
       <div className="fe01-preview-bar">
-        <span className="fe01-preview-badge">IT HELPDESK</span>
+        <span className="fe01-preview-badge">SMARTDESK</span>
         <span className="fe01-preview-text">
           Xác thực tài khoản Requester qua Backend
         </span>
@@ -682,13 +683,5 @@ function LoginPage() {
   );
 }
 
-function getHomePath(roles: string[]): string {
-  if (roles.includes("SUPERVISOR") || roles.includes("ADMIN")) {
-    return "/supervisor";
-  }
-  if (roles.includes("TECHNICIAN")) return "/technician";
-  if (roles.includes("REQUESTER")) return "/requester";
-  return "/login";
-}
 
 export default LoginPage;

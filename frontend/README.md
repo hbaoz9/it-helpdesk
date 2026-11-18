@@ -1,75 +1,14 @@
-# React + TypeScript + Vite
+﻿# SmartDesk Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19, TypeScript, Vite 8 và Ant Design 6. Chạy `npm ci`, sau đó `npm run dev` tại thư mục `frontend` (cổng 5174). Vite chuyển tiếp `/api` đến Backend cổng 3000.
 
-Currently, two official plugins are available:
+## Cấu trúc
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `src/app/`: Router, providers, cấu hình workspace và menu theo role.
+- `src/shared/`: AppShell, AuthContext, API client, kiểu dữ liệu và bảng Ticket dùng chung.
+- `src/features/requester/`, `technician/`, `supervisor/`, `admin/`: Các trang của từng workspace. Chức năng Administrator đang phát triển và chưa gọi API quản trị.
+- `src/pages/LoginPage.tsx`: Trang đăng nhập chung. Luồng đăng ký Requester hiện có được giữ nguyên; thay đổi `/auth/register` nằm ngoài phạm vi foundation.
 
-## React Compiler
+Giữ các URL `/requester`, `/requester/tickets`, `/requester/tickets/new`, `/technician`, `/technician/tickets`, `/technician/tickets/:id`, `/supervisor`, `/supervisor/queue`, `/supervisor/assignments`, `/supervisor/dashboard`. `/admin` chỉ cho role ADMIN. Menu workspace được lọc theo role do `/auth/me` trả về, và route cũng được bảo vệ độc lập với menu.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
-
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
+Chạy `npm run lint` và `npm run build` để kiểm tra Frontend.

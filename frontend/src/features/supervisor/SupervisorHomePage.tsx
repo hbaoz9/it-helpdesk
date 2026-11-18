@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Col, Row, Spin } from 'antd';
-import { getTickets } from '../../api/tickets';
-import type { TicketRecord } from '../../api/types';
+import { getTickets } from '../../shared/api/tickets';
+import type { TicketRecord } from '../../shared/api/types';
 import '../../styles/InternalWorkspace.css';
 
 const SupervisorHomePage = () => {
