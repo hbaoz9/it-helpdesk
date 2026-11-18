@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CategoriesService } from '../categories/categories.service.js';
+import { REQUIRED_ROLES } from '../auth/roles.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateTicketDto } from './dto/create-ticket.dto.js';
 import { TicketQueryDto } from './dto/ticket-query.dto.js';
@@ -123,6 +124,8 @@ describe('TicketsModule', () => {
       expect(dto.status).toBe('NEW');
       expect(dto.page).toBe(1);
       expect(dto.limit).toBe(20);
+      expect(TicketQueryDto.validate({ scope: 'requested' }).scope).toBe('requested');
+      expect(() => TicketQueryDto.validate({ scope: 'all' })).toThrow(BadRequestException);
 
       expect(() => TicketQueryDto.validate({ page: '0' })).toThrow(
         BadRequestException,
@@ -133,16 +136,53 @@ describe('TicketsModule', () => {
     });
   });
 
-  it('denies ADMIN-only Ticket reads before querying data', async () => {
+  it('limits requester-scoped lists to tickets created by the requester', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    prismaMock.ticket = { findMany } as unknown as PrismaService['ticket'];
+    const user = {
+      id: 'multi-id', email: 'multi@example.com', fullName: 'Multi',
+      roles: ['REQUESTER', 'TECHNICIAN'] as ('REQUESTER' | 'TECHNICIAN')[],
+    };
+    await ticketsService.findAll(user, TicketQueryDto.validate({ scope: 'requested', page: '2', limit: '10' }));
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { requesterId: user.id }, skip: 10, take: 10,
+    }));
+  });
+
+  it('does not grant ADMIN-only accounts Ticket route access', () => {
+    for (const method of [
+      'findAll', 'findById', 'create', 'countRequested',
+      'getRequesterActivity', 'addRequesterComment', 'closeRequesterTicket', 'reopenRequesterTicket',
+    ] as const) {
+      const roles = Reflect.getMetadata(REQUIRED_ROLES, ticketsController[method]) as string[];
+      expect(roles).not.toContain('ADMIN');
+    }
+    for (const method of ['getRequesterActivity', 'addRequesterComment', 'closeRequesterTicket', 'reopenRequesterTicket'] as const) {
+      const roles = Reflect.getMetadata(REQUIRED_ROLES, ticketsController[method]) as string[];
+      expect(roles).toEqual(['REQUESTER']);
+    }
+  });
+
+  it('denies ADMIN-only Ticket reads and creation before querying data', async () => {
     const admin = {
       id: 'admin-id', email: 'admin@example.com', fullName: 'Admin',
       roles: ['ADMIN' as const],
     };
+    const dto = CreateTicketDto.validate({
+      title: 'Cannot connect to VPN', description: 'VPN client shows error 809',
+      categoryId: '10000000-0000-4000-8000-000000000001',
+      impact: 'MEDIUM', urgency: 'HIGH',
+    });
     await expect(ticketsService.findAll(admin, TicketQueryDto.validate({}))).rejects.toThrow(ForbiddenException);
     await expect(ticketsService.findById(admin, 'ticket-id')).rejects.toThrow(ForbiddenException);
+    await expect(ticketsService.findAll(admin, TicketQueryDto.validate({ scope: 'requested' }))).rejects.toThrow(ForbiddenException);
+    await expect(ticketsService.countRequested(admin, TicketQueryDto.validate({}))).rejects.toThrow(ForbiddenException);
+    await expect(ticketsService.create(admin, dto)).rejects.toThrow(ForbiddenException);
+    expect(prismaMock.ticket).toBeUndefined();
+    expect(prismaMock.category).toBeUndefined();
   });
 
-  it('combines only assigned and owned Ticket access for REQUESTER + TECHNICIAN', async () => {
+  it('combines only assigned and owned Ticket access for REQUESTER + TECHNICIAN + ADMIN', async () => {
     const findMany = vi.fn().mockResolvedValue([]);
     prismaMock.ticket = { findMany } as unknown as PrismaService['ticket'];
     const user = {
@@ -154,22 +194,70 @@ describe('TicketsModule', () => {
       where: {
         AND: [{ OR: [{ requesterId: user.id }, { assigneeId: user.id }] }],
         OR: [
-          { code: { contains: 'printer' } },
-          { title: { contains: 'printer' } },
-          { description: { contains: 'printer' } },
+          { code: { contains: 'printer', mode: 'insensitive' } },
+          { title: { contains: 'printer', mode: 'insensitive' } },
+          { description: { contains: 'printer', mode: 'insensitive' } },
         ],
       },
     }));
   });
 
-  it('keeps Requester Ticket creation and priority calculation available', async () => {
+  it('restricts Ticket detail to the granted role scopes', async () => {
+    const findFirst = vi.fn().mockResolvedValue(null);
+    prismaMock.ticket = { findFirst } as unknown as PrismaService['ticket'];
+    const requester = {
+      id: 'requester-id', email: 'requester@example.com', fullName: 'Requester', roles: ['REQUESTER' as const],
+    };
+    const technician = {
+      id: 'tech-id', email: 'tech@example.com', fullName: 'Tech', roles: ['TECHNICIAN' as const],
+    };
+    await expect(ticketsService.findById(requester, 'ticket-id')).rejects.toThrow();
+    expect(findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: 'ticket-id', AND: [{ requesterId: requester.id }] },
+    }));
+    await expect(ticketsService.findById(technician, 'ticket-id')).rejects.toThrow();
+    expect(findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: 'ticket-id', AND: [{ assigneeId: technician.id }] },
+    }));
+  });
+
+  it('rejects requester scope when the account has no REQUESTER role', async () => {
+    const technician = {
+      id: 'tech-id', email: 'tech@example.com', fullName: 'Tech', roles: ['TECHNICIAN' as const],
+    };
+    await expect(ticketsService.findAll(technician, TicketQueryDto.validate({ scope: 'requested' })))
+      .rejects.toThrow(ForbiddenException);
+    await expect(ticketsService.findById(technician, 'ticket-id', 'requested'))
+      .rejects.toThrow(ForbiddenException);
+  });
+
+  it('counts only requester-owned Tickets with the selected filters', async () => {
+    const count = vi.fn().mockResolvedValue(4);
+    prismaMock.ticket = { count } as unknown as PrismaService['ticket'];
+    const requester = {
+      id: 'requester-id', email: 'requester@example.com', fullName: 'Requester',
+      roles: ['REQUESTER' as const],
+    };
+    await expect(ticketsService.countRequested(requester, TicketQueryDto.validate({ status: 'NEW', search: 'wifi' })))
+      .resolves.toEqual({ total: 4 });
+    expect(count).toHaveBeenCalledWith({ where: {
+      requesterId: requester.id,
+      status: 'NEW',
+      OR: [
+        { code: { contains: 'wifi', mode: 'insensitive' } },
+        { title: { contains: 'wifi', mode: 'insensitive' } },
+        { description: { contains: 'wifi', mode: 'insensitive' } },
+      ],
+    } });
+  });
+
+  it('keeps Requester Ticket creation and Backend priority calculation available', async () => {
     const categoryId = '10000000-0000-4000-8000-000000000001';
     const create = vi.fn().mockResolvedValue({ code: 'INC-TEST' });
     prismaMock.category = { findFirst: vi.fn().mockResolvedValue({ id: categoryId }) } as unknown as PrismaService['category'];
     prismaMock.ticket = { create } as unknown as PrismaService['ticket'];
     const requester = {
-      id: 'requester-id', email: 'requester@example.com', fullName: 'Requester',
-      roles: ['REQUESTER' as const],
+      id: 'requester-id', email: 'requester@example.com', fullName: 'Requester', roles: ['REQUESTER' as const],
     };
     const dto = CreateTicketDto.validate({
       title: 'Cannot connect to office Wi-Fi', description: 'Office Wi-Fi has been unavailable since morning',

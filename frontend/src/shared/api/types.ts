@@ -41,5 +41,17 @@ export interface TicketRecord {
   createdAt: string;
   updatedAt: string;
   resolutionNote: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
   version: number;
+}
+
+export interface TicketActivity {
+  id: string;
+  type: 'STATUS' | 'COMMENT';
+  content: string | null;
+  fromStatus: TicketStatus | null;
+  toStatus: TicketStatus | null;
+  createdAt: string;
+  actor: { id: string; fullName: string } | null;
 }
