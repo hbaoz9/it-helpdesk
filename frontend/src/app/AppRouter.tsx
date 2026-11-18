@@ -6,6 +6,7 @@ import LandingPage from '../pages/LandingPage';
 import RequesterHomePage from '../features/requester/RequesterHomePage';
 import MyTicketsPage from '../features/requester/MyTicketsPage';
 import CreateTicketPage from '../features/requester/CreateTicketPage';
+import AiAssistantPage from '../features/ai/AiAssistantPage';
 import TechnicianHomePage from '../features/technician/TechnicianHomePage';
 import AssignedTicketsPage from '../features/technician/AssignedTicketsPage';
 import TicketDetailPage from '../features/technician/TicketDetailPage';
@@ -31,6 +32,7 @@ export default function AppRouter() {
       <Route index element={<RequesterHomePage />} />
       <Route path="tickets" element={<MyTicketsPage />} />
       <Route path="tickets/new" element={<CreateTicketPage />} />
+      <Route path="ai" element={<AiAssistantPage />} />
     </Route>
     <Route path="/technician" element={<RequireRole roles={['TECHNICIAN']}><AppShell workspace="technician" /></RequireRole>}>
       <Route index element={<TechnicianHomePage />} />

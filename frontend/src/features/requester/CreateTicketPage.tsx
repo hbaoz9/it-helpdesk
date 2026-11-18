@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Col, Form, Input, Row, Select, Space, Tag, Typography, message } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { createTicket, getCategories } from '../../shared/api/tickets';
 import type { Category, ImpactLevel, UrgencyLevel } from '../../shared/api/types';
 import { computePreviewPriority, PRIORITY_METADATA } from './ticketMetadata';
@@ -26,27 +26,34 @@ const urgencyOptions = [
 
 export default function CreateTicketPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [draft] = useState(() => {
+    const state: unknown = location.state;
+    return state && typeof state === 'object' && 'aiDraft' in state && state.aiDraft && typeof state.aiDraft === 'object' &&
+    'title' in state.aiDraft && typeof state.aiDraft.title === 'string' && 'description' in state.aiDraft && typeof state.aiDraft.description === 'string'
+      ? { title: state.aiDraft.title.slice(0, 150), description: state.aiDraft.description.slice(0, 1500) } : null;
+  });
   const [form] = Form.useForm<FormValues>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
-  const impact: ImpactLevel = Form.useWatch('impact', form) ?? 'MEDIUM';
-  const urgency: UrgencyLevel = Form.useWatch('urgency', form) ?? 'MEDIUM';
-  const priority = computePreviewPriority(impact, urgency);
+  const impact: ImpactLevel | undefined = Form.useWatch('impact', form);
+  const urgency: UrgencyLevel | undefined = Form.useWatch('urgency', form);
+  const priority = impact && urgency ? computePreviewPriority(impact, urgency) : null;
 
   useEffect(() => {
     let active = true;
     getCategories().then((result) => {
       if (!active) return;
       setCategories(result);
-      if (result[0]) form.setFieldValue('categoryId', result[0].id);
+      if (result[0] && !draft) form.setFieldValue('categoryId', result[0].id);
     }).catch((cause: unknown) => {
       if (active) setCategoryError(cause instanceof Error ? cause.message : 'Không tải được danh mục.');
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [form]);
+  }, [form, draft]);
 
   const submit = async (values: FormValues) => {
     setSubmitting(true);
@@ -72,7 +79,8 @@ export default function CreateTicketPage() {
         <Card className="requester-card">
           {categoryError && <Alert showIcon type="error" message="Không tải được danh mục sự cố" description={categoryError} style={{ marginBottom: 20 }} />}
           {!loading && !categoryError && categories.length === 0 && <Alert showIcon type="warning" message="Chưa có danh mục sự cố" description="Vui lòng liên hệ quản trị viên trước khi tạo yêu cầu." style={{ marginBottom: 20 }} />}
-          <Form<FormValues> form={form} layout="vertical" requiredMark={false} initialValues={{ impact: 'MEDIUM', urgency: 'MEDIUM' }} onFinish={submit}>
+          {draft && <Alert showIcon type="info" message="Bản nháp từ gợi ý AI" description="Hãy kiểm tra, chỉnh sửa nội dung và tự chọn danh mục, mức ảnh hưởng, mức khẩn cấp trước khi gửi." style={{ marginBottom: 20 }} />}
+          <Form<FormValues> form={form} layout="vertical" requiredMark={false} initialValues={draft ?? { impact: 'MEDIUM', urgency: 'MEDIUM' }} onFinish={submit}>
             <Form.Item name="title" label="Tiêu đề sự cố" rules={[{ required: true, message: 'Vui lòng nhập tiêu đề.' }, { min: 10, message: 'Tiêu đề cần ít nhất 10 ký tự.' }]}>
               <Input size="large" maxLength={150} placeholder="Ví dụ: Máy in phòng kế toán không kết nối mạng" />
             </Form.Item>
@@ -91,7 +99,7 @@ export default function CreateTicketPage() {
         </Card>
       </Col>
       <Col xs={24} lg={8}><Card className="requester-card" title="Mức ưu tiên dự kiến">
-        <Tag color={PRIORITY_METADATA[priority].color} className="requester-priority">{PRIORITY_METADATA[priority].label}</Tag>
+        {priority ? <Tag color={PRIORITY_METADATA[priority].color} className="requester-priority">{PRIORITY_METADATA[priority].label}</Tag> : <Typography.Paragraph>Chọn mức ảnh hưởng và mức khẩn cấp để xem mức ưu tiên dự kiến.</Typography.Paragraph>}
         <Typography.Paragraph type="secondary">Mức ưu tiên được tính từ phạm vi ảnh hưởng và mức độ khẩn cấp bạn chọn. Hệ thống sẽ xác định mức chính thức khi tạo yêu cầu.</Typography.Paragraph>
       </Card></Col>
     </Row>

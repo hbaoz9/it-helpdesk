@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { BarChartOutlined, BellOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, MenuOutlined, PlusOutlined, SettingOutlined, SwapOutlined, TeamOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { BarChartOutlined, BellOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, MenuOutlined, PlusOutlined, RobotOutlined, SettingOutlined, SwapOutlined, TeamOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Tooltip, message } from 'antd';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
@@ -12,7 +12,7 @@ import './AppShell.css';
 
 const { Sider, Header, Content } = Layout;
 const icons: Record<string, ReactNode> = {
-  '/requester': <HomeOutlined />, '/requester/tickets': <FileTextOutlined />, '/requester/tickets/new': <PlusOutlined />,
+  '/requester': <HomeOutlined />, '/requester/ai': <RobotOutlined />, '/requester/tickets': <FileTextOutlined />, '/requester/tickets/new': <PlusOutlined />,
   '/technician': <HomeOutlined />, '/technician/tickets': <UnorderedListOutlined />,
   '/supervisor': <HomeOutlined />, '/supervisor/queue': <UnorderedListOutlined />,
   '/supervisor/assignments': <TeamOutlined />, '/supervisor/dashboard': <BarChartOutlined />,
