@@ -36,7 +36,7 @@ export interface TicketRecord {
   priority: TicketPriority;
   status: TicketStatus;
   category: { id: string; name: string };
-  requester: { id: string; fullName: string };
+  requester: { id: string; fullName: string; email?: string };
   assignee: { id: string; fullName: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -49,9 +49,19 @@ export interface TicketRecord {
 export interface TicketActivity {
   id: string;
   type: 'STATUS' | 'COMMENT';
+  visibility?: 'PUBLIC' | 'INTERNAL';
   content: string | null;
   fromStatus: TicketStatus | null;
   toStatus: TicketStatus | null;
   createdAt: string;
   actor: { id: string; fullName: string } | null;
+}
+
+export interface TechnicianTicketSummary {
+  total: number;
+  inProgress: number;
+  waitingRequester: number;
+  resolved: number;
+  highPriority: number;
+  requesterReplies: number;
 }

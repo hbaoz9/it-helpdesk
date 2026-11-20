@@ -3,6 +3,7 @@ import { CategoriesService } from '../categories/categories.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TicketActionDto } from './dto/ticket-action.dto.js';
 import { TicketCommentDto } from './dto/ticket-comment.dto.js';
+import { TicketTextActionDto } from './dto/ticket-text-action.dto.js';
 import { TicketsService } from './tickets.service.js';
 
 const requester = {
@@ -12,6 +13,10 @@ const requester = {
 const admin = {
   id: 'admin-id', email: 'admin@example.com', fullName: 'Admin',
   roles: ['ADMIN' as const],
+};
+const technician = {
+  id: 'tech-id', email: 'tech@example.com', fullName: 'Technician',
+  roles: ['TECHNICIAN' as const],
 };
 
 function serviceWith(prisma: Record<string, unknown>): TicketsService {
@@ -25,6 +30,111 @@ describe('Requester Ticket lifecycle', () => {
     expect(() => TicketActionDto.validate({ version: 0 })).toThrow(BadRequestException);
     expect(() => TicketActionDto.validate({ version: 1, reason: '' }, true)).toThrow(BadRequestException);
     expect(() => TicketCommentDto.validate({ version: 1, content: '   ' })).toThrow(BadRequestException);
+  });
+
+  describe('Technician Ticket lifecycle', () => {
+    it('validates technician action text and version', () => {
+      expect(TicketTextActionDto.validate({ version: 2, content: '  Cần ảnh chụp màn hình  ' }, 'Note'))
+        .toMatchObject({ version: 2, content: 'Cần ảnh chụp màn hình' });
+      expect(() => TicketTextActionDto.validate({ version: 0, content: 'Nội dung' }, 'Note'))
+        .toThrow(BadRequestException);
+      expect(() => TicketTextActionDto.validate({ version: 1, content: '   ' }, 'Note'))
+        .toThrow(BadRequestException);
+    });
+
+    it('records an assigned Ticket from ASSIGNED through requester follow-up to RESOLVED', async () => {
+      const record = {
+        id: 'ticket-id', assigneeId: technician.id, status: 'ASSIGNED' as string, version: 1,
+        resolutionNote: null as string | null, resolvedAt: null as Date | null,
+      };
+      const activities: Record<string, unknown>[] = [];
+      const findAssigned = vi.fn(async () => ({ id: record.id, status: record.status }));
+      const updateMany = vi.fn(async ({ where, data }: {
+        where: { status: string | { in: string[] }; version: number };
+        data: { status?: string; version: { increment: number }; resolutionNote?: string; resolvedAt?: Date };
+      }) => {
+        const statusMatches = typeof where.status === 'string'
+          ? where.status === record.status
+          : where.status.in.includes(record.status);
+        if (!statusMatches || where.version !== record.version) return { count: 0 };
+        if (data.status) record.status = data.status;
+        if (data.resolutionNote !== undefined) record.resolutionNote = data.resolutionNote;
+        if (data.resolvedAt) record.resolvedAt = data.resolvedAt;
+        record.version += data.version.increment;
+        return { count: 1 };
+      });
+      const createActivity = vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const activity = { id: `activity-${activities.length + 1}`, ...data };
+        activities.push(activity);
+        return activity;
+      });
+      const tx = {
+        ticket: { findFirst: findAssigned, updateMany },
+        ticketActivity: { create: createActivity },
+      };
+      const fullTicket = vi.fn(async () => ({ ...record }));
+      const service = serviceWith({
+        $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+        ticket: { findFirst: fullTicket },
+      });
+
+      await service.startAssignedTicket(technician, record.id, TicketActionDto.validate({ version: 1 }));
+      await service.addTechnicianComment(technician, record.id, TicketTextActionDto.validate({ version: 2, content: 'Đang kiểm tra' }, 'Comment'));
+      await service.addTechnicianNote(technician, record.id, TicketTextActionDto.validate({ version: 3, content: 'Đã kiểm tra log' }, 'Note'));
+      await service.requestInformation(technician, record.id, TicketTextActionDto.validate({ version: 4, content: 'Vui lòng gửi ảnh lỗi' }, 'Information request'));
+      expect(record.status).toBe('WAITING_REQUESTER');
+      expect(activities.at(-1)).toMatchObject({ fromStatus: 'IN_PROGRESS', toStatus: 'WAITING_REQUESTER', visibility: 'PUBLIC' });
+
+      await service.addRequesterComment(
+        requester, record.id, TicketCommentDto.validate({ version: 5, content: 'Đã gửi ảnh lỗi theo yêu cầu' }),
+      );
+      expect(record.status).toBe('IN_PROGRESS');
+      await service.resolveAssignedTicket(technician, record.id, TicketTextActionDto.validate({ version: 6, content: 'Đã cài lại VPN và xác nhận kết nối' }, 'Resolution'));
+
+      expect(record).toMatchObject({
+        status: 'RESOLVED',
+        resolutionNote: 'Đã cài lại VPN và xác nhận kết nối',
+        version: 7,
+      });
+      expect(activities.map((item) => item.visibility)).toEqual([
+        'PUBLIC', 'PUBLIC', 'INTERNAL', 'PUBLIC', 'PUBLIC', 'PUBLIC', 'PUBLIC',
+      ]);
+      expect(activities.at(-1)).toMatchObject({
+        fromStatus: 'IN_PROGRESS', toStatus: 'RESOLVED',
+        content: 'Đã cài lại VPN và xác nhận kết nối',
+      });
+    });
+
+    it('rejects technician activity and mutations on a Ticket not assigned to the caller', async () => {
+      const findFirst = vi.fn().mockResolvedValue(null);
+      const updateMany = vi.fn();
+      const create = vi.fn();
+      const service = serviceWith({
+        ticket: { findFirst },
+        ticketActivity: { findMany: vi.fn() },
+        $transaction: vi.fn((callback: (client: unknown) => unknown) => callback({
+          ticket: { findFirst, updateMany }, ticketActivity: { create },
+        })),
+      });
+      await expect(service.startAssignedTicket(technician, 'other-ticket', TicketActionDto.validate({ version: 1 })))
+        .rejects.toThrow(NotFoundException);
+      await expect(service.getTechnicianActivity(technician, 'other-ticket'))
+        .rejects.toThrow(NotFoundException);
+      await expect(service.startAssignedTicket(admin, 'other-ticket', TicketActionDto.validate({ version: 1 })))
+        .rejects.toThrow(ForbiddenException);
+      expect(updateMany).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('returns only assigned Technician tickets for explicit scope', async () => {
+      const findMany = vi.fn().mockResolvedValue([]);
+      const service = serviceWith({ ticket: { findMany } });
+      await service.findAll(technician, { scope: 'assigned' });
+      expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { assigneeId: technician.id },
+      }));
+      await expect(service.findAll(admin, { scope: 'assigned' })).rejects.toThrow(ForbiddenException);
+    });
   });
 
   it('reads only public activity of an owned Ticket', async () => {
@@ -51,6 +161,15 @@ describe('Requester Ticket lifecycle', () => {
     await expect(service.addRequesterComment(requester, 'ticket-id', dto)).resolves.toEqual({ id: 'activity-id' });
     expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ requesterId: requester.id, version: 3, status: { in: expect.arrayContaining(['WAITING_REQUESTER']) } }),
+      data: expect.objectContaining({ status: 'IN_PROGRESS', version: { increment: 1 } }),
+    }));
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        actorId: requester.id,
+        type: 'STATUS',
+        fromStatus: 'WAITING_REQUESTER',
+        toStatus: 'IN_PROGRESS',
+      }),
     }));
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ actorId: requester.id, type: 'COMMENT', visibility: 'PUBLIC', content: dto.content }),

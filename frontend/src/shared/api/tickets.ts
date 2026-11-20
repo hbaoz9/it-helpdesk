@@ -2,6 +2,7 @@ import { apiRequest } from './client';
 import type {
   Category,
   ImpactLevel,
+  TechnicianTicketSummary,
   TicketRecord,
   TicketActivity,
   TicketStatus,
@@ -17,7 +18,7 @@ export interface CreateTicketInput {
 }
 
 export interface TicketFilters {
-  scope?: 'requested';
+  scope?: 'requested' | 'assigned';
   status?: TicketStatus;
   priority?: TicketRecord['priority'];
   search?: string;
@@ -40,6 +41,48 @@ export function getTickets(filters: TicketFilters = {}): Promise<TicketRecord[]>
 
 export function getTicket(id: string): Promise<TicketRecord> {
   return apiRequest(`/tickets/${encodeURIComponent(id)}`);
+}
+
+export function getAssignedTicket(id: string): Promise<TicketRecord> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}?scope=assigned`);
+}
+
+export function getTechnicianSummary(): Promise<TechnicianTicketSummary> {
+  return apiRequest('/tickets/technician/summary');
+}
+
+export function getTechnicianTicketActivity(id: string): Promise<TicketActivity[]> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/technician-activity`);
+}
+
+export function startAssignedTicket(id: string, version: number): Promise<TicketRecord> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/start`, {
+    method: 'POST', body: JSON.stringify({ version }),
+  });
+}
+
+export function addTechnicianComment(id: string, content: string, version: number): Promise<TicketActivity> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/technician-comments`, {
+    method: 'POST', body: JSON.stringify({ content, version }),
+  });
+}
+
+export function addTechnicianNote(id: string, content: string, version: number): Promise<TicketActivity> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/notes`, {
+    method: 'POST', body: JSON.stringify({ content, version }),
+  });
+}
+
+export function requestTicketInformation(id: string, content: string, version: number): Promise<TicketRecord> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/request-information`, {
+    method: 'POST', body: JSON.stringify({ content, version }),
+  });
+}
+
+export function resolveAssignedTicket(id: string, resolution: string, version: number): Promise<TicketRecord> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/resolve`, {
+    method: 'POST', body: JSON.stringify({ content: resolution, version }),
+  });
 }
 
 export function getRequesterTicket(id: string): Promise<TicketRecord> {

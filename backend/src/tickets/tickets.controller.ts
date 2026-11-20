@@ -16,6 +16,7 @@ import { CreateTicketDto } from './dto/create-ticket.dto.js';
 import { TicketActionDto } from './dto/ticket-action.dto.js';
 import { TicketCommentDto } from './dto/ticket-comment.dto.js';
 import { TicketQueryDto } from './dto/ticket-query.dto.js';
+import { TicketTextActionDto } from './dto/ticket-text-action.dto.js';
 import { TicketsService } from './tickets.service.js';
 
 @UseGuards(AuthGuard, RolesGuard)
@@ -53,6 +54,12 @@ export class TicketsController {
     return this.ticketsService.countRequested(request.user, TicketQueryDto.validate(query));
   }
 
+  @Roles('TECHNICIAN')
+  @Get('technician/summary')
+  getTechnicianSummary(@Req() request: AuthenticatedRequest) {
+    return this.ticketsService.getTechnicianSummary(request.user);
+  }
+
   @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR')
   @Get(':id')
   findById(
@@ -61,6 +68,70 @@ export class TicketsController {
     @Query() query: Record<string, unknown>,
   ) {
     return this.ticketsService.findById(request.user, id, TicketQueryDto.validate(query).scope);
+  }
+
+  @Roles('TECHNICIAN')
+  @Get(':id/technician-activity')
+  getTechnicianActivity(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.ticketsService.getTechnicianActivity(request.user, id);
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/start')
+  startAssignedTicket(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.startAssignedTicket(request.user, id, TicketActionDto.validate(input));
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/technician-comments')
+  addTechnicianComment(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.addTechnicianComment(
+      request.user, id, TicketTextActionDto.validate(input, 'Comment'),
+    );
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/notes')
+  addTechnicianNote(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.addTechnicianNote(
+      request.user, id, TicketTextActionDto.validate(input, 'Note'),
+    );
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/request-information')
+  requestInformation(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.requestInformation(
+      request.user, id, TicketTextActionDto.validate(input, 'Information request'),
+    );
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/resolve')
+  resolveAssignedTicket(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.resolveAssignedTicket(
+      request.user, id, TicketTextActionDto.validate(input, 'Resolution'),
+    );
   }
 
   @Roles('REQUESTER')

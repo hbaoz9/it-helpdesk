@@ -125,6 +125,7 @@ describe('TicketsModule', () => {
       expect(dto.page).toBe(1);
       expect(dto.limit).toBe(20);
       expect(TicketQueryDto.validate({ scope: 'requested' }).scope).toBe('requested');
+      expect(TicketQueryDto.validate({ scope: 'assigned' }).scope).toBe('assigned');
       expect(() => TicketQueryDto.validate({ scope: 'all' })).toThrow(BadRequestException);
 
       expect(() => TicketQueryDto.validate({ page: '0' })).toThrow(
@@ -153,6 +154,8 @@ describe('TicketsModule', () => {
     for (const method of [
       'findAll', 'findById', 'create', 'countRequested',
       'getRequesterActivity', 'addRequesterComment', 'closeRequesterTicket', 'reopenRequesterTicket',
+      'getTechnicianSummary', 'getTechnicianActivity', 'startAssignedTicket',
+      'addTechnicianComment', 'addTechnicianNote', 'requestInformation', 'resolveAssignedTicket',
     ] as const) {
       const roles = Reflect.getMetadata(REQUIRED_ROLES, ticketsController[method]) as string[];
       expect(roles).not.toContain('ADMIN');
@@ -160,6 +163,13 @@ describe('TicketsModule', () => {
     for (const method of ['getRequesterActivity', 'addRequesterComment', 'closeRequesterTicket', 'reopenRequesterTicket'] as const) {
       const roles = Reflect.getMetadata(REQUIRED_ROLES, ticketsController[method]) as string[];
       expect(roles).toEqual(['REQUESTER']);
+    }
+    for (const method of [
+      'getTechnicianSummary', 'getTechnicianActivity', 'startAssignedTicket',
+      'addTechnicianComment', 'addTechnicianNote', 'requestInformation', 'resolveAssignedTicket',
+    ] as const) {
+      const roles = Reflect.getMetadata(REQUIRED_ROLES, ticketsController[method]) as string[];
+      expect(roles).toEqual(['TECHNICIAN']);
     }
   });
 
@@ -218,6 +228,10 @@ describe('TicketsModule', () => {
     await expect(ticketsService.findById(technician, 'ticket-id')).rejects.toThrow();
     expect(findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { id: 'ticket-id', AND: [{ assigneeId: technician.id }] },
+    }));
+    await expect(ticketsService.findById(technician, 'ticket-id', 'assigned')).rejects.toThrow();
+    expect(findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: 'ticket-id', assigneeId: technician.id },
     }));
   });
 
