@@ -3,9 +3,10 @@ import type {
   TicketStatus,
 } from '../generated/prisma/client.js';
 
-export type SlaHealthStatus = 'MET' | 'ON_TRACK' | 'AT_RISK' | 'BREACHED';
+export type SlaHealthStatus = 'MET' | 'ON_TRACK' | 'AT_RISK' | 'BREACHED' | 'EXCLUDED';
 
 export interface PersistedSlaTarget {
+  slaPolicy?: { priority: TicketPriority } | null;
   policyRevision: number;
   responseTargetMinutes: number;
   resolutionTargetMinutes: number;
@@ -21,6 +22,8 @@ export interface TicketSlaSnapshot {
   priority: TicketPriority;
   status: TicketStatus;
   createdAt: string;
+  deadlineBasis: 'AT_TICKET_CREATION';
+  policyPriority: TicketPriority | null;
   policyRevision: number;
   responseTargetMinutes: number;
   resolutionTargetMinutes: number;
@@ -37,12 +40,8 @@ function evaluateMetricStatus(
   createdAtMs: number,
   dueAtMs: number,
   completedAtMs: number | null,
-  isCancelled: boolean,
   nowMs: number,
 ): SlaHealthStatus {
-  if (isCancelled) {
-    return 'MET';
-  }
   if (completedAtMs !== null) {
     return completedAtMs <= dueAtMs ? 'MET' : 'BREACHED';
   }
@@ -61,6 +60,9 @@ function combineSlaStatus(
   responseStatus: SlaHealthStatus,
   resolutionStatus: SlaHealthStatus,
 ): SlaHealthStatus {
+  if (responseStatus === 'EXCLUDED' && resolutionStatus === 'EXCLUDED') {
+    return 'EXCLUDED';
+  }
   if (responseStatus === 'BREACHED' || resolutionStatus === 'BREACHED') {
     return 'BREACHED';
   }
@@ -88,7 +90,6 @@ export function computeTicketSla(
   const createdAtMs = ticket.createdAt.getTime();
   const responseDueAtMs = target.responseDueAt.getTime();
   const resolutionDueAtMs = target.resolutionDueAt.getTime();
-  const isRejected = ticket.status === 'REJECTED';
 
   const resolutionCompletedAt =
     ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
@@ -97,19 +98,17 @@ export function computeTicketSla(
 
   const responseCompletedAt = target.firstResponseAt;
 
-  const responseStatus = evaluateMetricStatus(
+  const responseStatus = ticket.status === 'REJECTED' ? 'EXCLUDED' : evaluateMetricStatus(
     createdAtMs,
     responseDueAtMs,
     responseCompletedAt ? responseCompletedAt.getTime() : null,
-    isRejected,
     now.getTime(),
   );
 
-  const resolutionStatus = evaluateMetricStatus(
+  const resolutionStatus = ticket.status === 'REJECTED' ? 'EXCLUDED' : evaluateMetricStatus(
     createdAtMs,
     resolutionDueAtMs,
     resolutionCompletedAt ? resolutionCompletedAt.getTime() : null,
-    isRejected,
     now.getTime(),
   );
 
@@ -118,6 +117,8 @@ export function computeTicketSla(
     priority: ticket.priority,
     status: ticket.status,
     createdAt: ticket.createdAt.toISOString(),
+    deadlineBasis: 'AT_TICKET_CREATION',
+    policyPriority: target.slaPolicy?.priority ?? null,
     policyRevision: target.policyRevision,
     responseTargetMinutes: target.responseTargetMinutes,
     resolutionTargetMinutes: target.resolutionTargetMinutes,

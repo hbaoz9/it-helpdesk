@@ -375,16 +375,16 @@ const SupervisorDashboardPage = () => {
                   </div>
                 </div>
                 <Descriptions column={1} size="small" bordered>
-                  <Descriptions.Item label="P1 – Critical (15p / 4h)">
+                  <Descriptions.Item label="P1 – Critical">
                     <Tag color="red">{dashboard.byPriority.P1} Ticket</Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="P2 – High (1h / 8h)">
+                  <Descriptions.Item label="P2 – High">
                     <Tag color="volcano">{dashboard.byPriority.P2} Ticket</Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="P3 – Medium (4h / 24h)">
+                  <Descriptions.Item label="P3 – Medium">
                     <Tag color="gold">{dashboard.byPriority.P3} Ticket</Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="P4 – Low (8h / 72h)">
+                  <Descriptions.Item label="P4 – Low">
                     <Tag color="green">{dashboard.byPriority.P4} Ticket</Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="Tình trạng SLA">
@@ -396,6 +396,7 @@ const SupervisorDashboardPage = () => {
                     </Tag>
                     <Tag color="error">Quá hạn: {dashboard.sla.breached}</Tag>
                     <Tag color="success">Đạt: {dashboard.sla.met}</Tag>
+                    {dashboard.sla.excluded > 0 && <Tag>Không tính SLA (từ chối): {dashboard.sla.excluded}</Tag>}
                     {dashboard.sla.unknown > 0 && <Tag>Chưa có SLA: {dashboard.sla.unknown}</Tag>}
                   </Descriptions.Item>
                 </Descriptions>

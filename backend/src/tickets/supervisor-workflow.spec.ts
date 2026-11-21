@@ -157,6 +157,7 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
           }),
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
+        ticketSla: { updateMany: vi.fn() },
         ticketActivity: { create: vi.fn() },
       };
       const service = serviceWith({
@@ -205,6 +206,7 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
           }),
         }),
       );
+      expect(tx.ticketSla.updateMany).not.toHaveBeenCalled();
     });
 
     it('requires a reason if priority is manually overridden during triage (BR-02)', async () => {
@@ -420,6 +422,7 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
           }),
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
+        ticketSla: { updateMany: vi.fn() },
         ticketActivity: { create: vi.fn() },
       };
       const service = serviceWith({
@@ -451,6 +454,7 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
           }),
         }),
       );
+      expect(tx.ticketSla.updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -477,7 +481,9 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
       expect(snapshot.responseDueAt).toBe('2026-11-20T08:30:00.000Z');
       expect(ticketStore.findFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 'ticket-1', AND: [{ requesterId: requester.id }] },
-        select: expect.objectContaining({ ticketSla: true }),
+        select: expect.objectContaining({ ticketSla: expect.objectContaining({
+          include: { slaPolicy: { select: { priority: true } } },
+        }) }),
       }));
       await expect(service.getTicketSla(adminOnly, 'ticket-1')).rejects.toThrow(ForbiddenException);
       expect(ticketStore.findFirst).toHaveBeenCalledTimes(1);
@@ -541,6 +547,49 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
       expect(computeTicketSla({ ...resolved, status: 'ASSIGNED', resolvedAt: null }, snapshot, new Date('2026-11-20T12:01:00.000Z')).resolutionStatus).toBe('BREACHED');
     });
 
+    it('keeps the P4 snapshot deadline after triage or override changes current Priority to P1', () => {
+      const createdAt = new Date('2026-11-20T08:00:00.000Z');
+      const target = {
+        slaPolicy: { priority: 'P4' as const }, policyRevision: 3,
+        responseTargetMinutes: 480, resolutionTargetMinutes: 4320,
+        responseDueAt: new Date('2026-11-20T16:00:00.000Z'),
+        resolutionDueAt: new Date('2026-11-23T08:00:00.000Z'),
+        firstResponseAt: null,
+      };
+      const ticket = {
+        id: 'ticket-1', priority: 'P1' as const, status: 'TRIAGED' as const,
+        createdAt, resolvedAt: null, closedAt: null,
+      };
+      expect(computeTicketSla(ticket, target, new Date('2026-11-20T09:00:00.000Z')))
+        .toMatchObject({
+          priority: 'P1', policyPriority: 'P4', policyRevision: 3,
+          deadlineBasis: 'AT_TICKET_CREATION', responseTargetMinutes: 480,
+          responseDueAt: '2026-11-20T16:00:00.000Z',
+          resolutionDueAt: '2026-11-23T08:00:00.000Z',
+        });
+      expect(computeTicketSla({ ...ticket, status: 'ASSIGNED' }, target, new Date('2026-11-20T09:00:00.000Z')).responseDueAt)
+        .toBe('2026-11-20T16:00:00.000Z');
+    });
+
+    it('excludes REJECTED tickets from SLA achievement, regardless of elapsed time', () => {
+      const createdAt = new Date('2026-11-20T08:00:00.000Z');
+      const ticket = {
+        id: 'rejected', priority: 'P4' as const, status: 'REJECTED' as const,
+        createdAt, resolvedAt: null, closedAt: null,
+      };
+      const target = {
+        policyRevision: 1, responseTargetMinutes: 480, resolutionTargetMinutes: 4320,
+        responseDueAt: new Date('2026-11-20T16:00:00.000Z'),
+        resolutionDueAt: new Date('2026-11-23T08:00:00.000Z'),
+        firstResponseAt: null,
+      };
+      for (const now of [new Date('2026-11-20T08:05:00.000Z'), new Date('2026-11-24T08:00:00.000Z')]) {
+        expect(computeTicketSla(ticket, target, now)).toMatchObject({
+          responseStatus: 'EXCLUDED', resolutionStatus: 'EXCLUDED', overallStatus: 'EXCLUDED',
+        });
+      }
+    });
+
     it('aggregates real ticket counts, SLA status, and technician workload for Dashboard V1', async () => {
       const createdAt = new Date('2026-11-20T08:00:00.000Z');
       const now = new Date('2026-11-20T08:20:00.000Z');
@@ -583,6 +632,16 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
               id: 'legacy', assigneeId: null, priority: 'P4', status: 'CLOSED',
               createdAt, resolvedAt: null, closedAt: now, ticketSla: null,
             },
+            {
+              id: 'rejected', assigneeId: null, priority: 'P4', status: 'REJECTED',
+              createdAt, resolvedAt: null, closedAt: null,
+              ticketSla: {
+                policyRevision: 1, responseTargetMinutes: 480, resolutionTargetMinutes: 4320,
+                responseDueAt: new Date('2026-11-20T16:00:00.000Z'),
+                resolutionDueAt: new Date('2026-11-23T08:00:00.000Z'),
+                firstResponseAt: null,
+              },
+            },
           ]),
         },
         user: {
@@ -598,7 +657,7 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
       });
 
       const dashboard = await service.getSupervisorDashboard(supervisor, now);
-      expect(dashboard.totalTickets).toBe(3);
+      expect(dashboard.totalTickets).toBe(4);
       expect(dashboard.unassignedCount).toBe(1);
       expect(dashboard.triageQueueCount).toBe(1);
       expect(dashboard.byStatus.NEW).toBe(1);
@@ -608,6 +667,8 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
       expect(dashboard.sla.breached).toBe(1);
       expect(dashboard.sla.onTrack).toBe(1);
       expect(dashboard.sla.unknown).toBe(1);
+      expect(dashboard.sla.excluded).toBe(1);
+      expect(dashboard.sla.met).toBe(0);
       expect(dashboard.workloadByTechnician).toEqual([
         expect.objectContaining({
           id: technician.id,

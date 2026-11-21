@@ -39,6 +39,7 @@ import type {
   TicketSlaSnapshot,
   UrgencyLevel,
 } from '../../shared/api/types';
+import { ApiError } from '../../shared/api/client';
 import TicketPriorityTag from '../../shared/components/tickets/TicketPriorityTag';
 import TicketStatusTag from '../../shared/components/tickets/TicketStatusTag';
 
@@ -55,10 +56,10 @@ const URGENCY_OPTIONS: { value: UrgencyLevel; label: string }[] = [
 ];
 
 const PRIORITY_OPTIONS: { value: TicketPriority; label: string }[] = [
-  { value: 'P1', label: 'P1 – Critical (Phản hồi 15p / Giải quyết 4h)' },
-  { value: 'P2', label: 'P2 – High (Phản hồi 1h / Giải quyết 8h)' },
-  { value: 'P3', label: 'P3 – Medium (Phản hồi 4h / Giải quyết 24h)' },
-  { value: 'P4', label: 'P4 – Low (Phản hồi 8h / Giải quyết 72h)' },
+  { value: 'P1', label: 'P1 – Critical' },
+  { value: 'P2', label: 'P2 – High' },
+  { value: 'P3', label: 'P3 – Medium' },
+  { value: 'P4', label: 'P4 – Low' },
 ];
 
 const SLA_STATUS_META: Record<
@@ -69,6 +70,7 @@ const SLA_STATUS_META: Record<
   ON_TRACK: { label: 'Trong hạn SLA', color: 'processing' },
   AT_RISK: { label: 'Sắp quá hạn (≥80%)', color: 'warning' },
   BREACHED: { label: 'Quá hạn SLA', color: 'error' },
+  EXCLUDED: { label: 'Không tính SLA', color: 'default' },
 };
 
 function calculateMatrixPriority(
@@ -143,7 +145,12 @@ export default function SupervisorWorkbenchDrawer({
     Promise.all([
       getTicket(ticketId),
       getSupervisorTicketEvents(ticketId),
-      getTicketSla(ticketId),
+      getTicketSla(ticketId).catch((cause: unknown) => {
+        if (cause instanceof ApiError && cause.status === 503 && cause.message.includes('SLA snapshot unavailable')) {
+          return null;
+        }
+        throw cause;
+      }),
     ])
       .then(([loadedTicket, loadedEvents, loadedSla]) => {
         if (!active) return;
@@ -328,6 +335,13 @@ export default function SupervisorWorkbenchDrawer({
                 </Tag>
               }
             >
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={`Hạn SLA chốt khi tạo Ticket theo chính sách ${sla.policyPriority ?? 'không xác định'} (revision ${sla.policyRevision}). Priority hiện tại: ${sla.priority}.`}
+                description={`Mục tiêu phản hồi ${sla.responseTargetMinutes} phút, giải quyết ${sla.resolutionTargetMinutes} phút. Phân loại hoặc điều chỉnh Priority sau đó không đổi hai deadline bên dưới.`}
+              />
               <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered>
                 <Descriptions.Item label="Hạn phản hồi đầu tiên">
                   {new Date(sla.responseDueAt).toLocaleString('vi-VN')}{' '}
@@ -343,6 +357,9 @@ export default function SupervisorWorkbenchDrawer({
                 </Descriptions.Item>
               </Descriptions>
             </Card>
+          )}
+          {!sla && (
+            <Alert type="info" showIcon message="Ticket cũ chưa có SLA snapshot; chưa thể xác định deadline lịch sử." />
           )}
 
           {/* Bước 1: Phân loại Ticket (Triage: NEW -> TRIAGED) */}
@@ -518,6 +535,9 @@ export default function SupervisorWorkbenchDrawer({
               title="3. Điều chỉnh mức độ ưu tiên (Override Priority – BR-02)"
             >
               <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                <Typography.Text type="secondary">
+                  Đổi Priority chỉ cập nhật mức ưu tiên xử lý. Deadline SLA đã chốt khi tạo Ticket được giữ nguyên.
+                </Typography.Text>
                 <Select
                   style={{ width: '100%' }}
                   value={overridePriorityValue}

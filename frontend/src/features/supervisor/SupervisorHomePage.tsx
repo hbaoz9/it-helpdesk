@@ -9,6 +9,7 @@ import {
   Spin,
   Table,
   Tag,
+  Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
@@ -296,6 +297,11 @@ const SupervisorHomePage = () => {
                 </Tag>
               </Col>
             </Row>
+            {(dashboard.sla.excluded > 0 || dashboard.sla.unknown > 0) && (
+              <Typography.Text type="secondary">
+                Không tính SLA (từ chối): {dashboard.sla.excluded} · Chưa có SLA: {dashboard.sla.unknown}
+              </Typography.Text>
+            )}
           </div>
 
           {/* Hàng đợi cần điều phối ngay */}

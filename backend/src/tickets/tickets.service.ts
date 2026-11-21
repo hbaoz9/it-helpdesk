@@ -59,6 +59,7 @@ export interface SupervisorDashboardSummary {
     atRisk: number;
     breached: number;
     met: number;
+    excluded: number;
     unknown: number;
   };
   workloadByTechnician: SupervisorTechnicianSummary[];
@@ -1033,7 +1034,7 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
         createdAt: true,
         resolvedAt: true,
         closedAt: true,
-        ticketSla: true,
+        ticketSla: { include: { slaPolicy: { select: { priority: true } } } },
       },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
@@ -1060,7 +1061,7 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
           createdAt: true,
           resolvedAt: true,
           closedAt: true,
-          ticketSla: true,
+          ticketSla: { include: { slaPolicy: { select: { priority: true } } } },
         },
       }),
       this.listTechnicians(user),
@@ -1089,6 +1090,7 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
       atRisk: 0,
       breached: 0,
       met: 0,
+      excluded: 0,
       unknown: 0,
     };
 
@@ -1118,7 +1120,8 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
       if (slaSnap.overallStatus === 'BREACHED') sla.breached++;
       else if (slaSnap.overallStatus === 'AT_RISK') sla.atRisk++;
       else if (slaSnap.overallStatus === 'ON_TRACK') sla.onTrack++;
-      else sla.met++;
+      else if (slaSnap.overallStatus === 'MET') sla.met++;
+      else sla.excluded++;
     }
 
     return {
@@ -1145,7 +1148,7 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
         createdAt: true,
         resolvedAt: true,
         closedAt: true,
-        ticketSla: true,
+        ticketSla: { include: { slaPolicy: { select: { priority: true } } } },
       },
     });
 

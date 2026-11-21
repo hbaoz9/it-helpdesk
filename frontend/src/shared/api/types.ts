@@ -11,7 +11,7 @@ export type TicketStatus =
 export type TicketPriority = 'P1' | 'P2' | 'P3' | 'P4';
 export type ImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 export type UrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH';
-export type SlaHealthStatus = 'MET' | 'ON_TRACK' | 'AT_RISK' | 'BREACHED';
+export type SlaHealthStatus = 'MET' | 'ON_TRACK' | 'AT_RISK' | 'BREACHED' | 'EXCLUDED';
 
 export interface AuthUser {
   id: string;
@@ -92,6 +92,8 @@ export interface TicketSlaSnapshot {
   priority: TicketPriority;
   status: TicketStatus;
   createdAt: string;
+  deadlineBasis: 'AT_TICKET_CREATION';
+  policyPriority: TicketPriority | null;
   policyRevision: number;
   responseTargetMinutes: number;
   resolutionTargetMinutes: number;
@@ -127,6 +129,7 @@ export interface SupervisorDashboardSummary {
     atRisk: number;
     breached: number;
     met: number;
+    excluded: number;
     unknown: number;
   };
   workloadByTechnician: SupervisorTechnicianSummary[];
