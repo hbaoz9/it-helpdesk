@@ -1,23 +1,225 @@
-.requester-page { display: flex; flex-direction: column; gap: 20px; max-width: 1320px; margin: 0 auto; }
-.requester-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
-.requester-heading .ant-typography { margin: 0 0 6px; }
-.requester-card, .requester-stats .ant-card { border: 1px solid #e4ebf5; box-shadow: 0 8px 24px rgba(24, 50, 95, .04); border-radius: 16px; }
-.requester-hero { border: 0; border-radius: 18px; background: linear-gradient(115deg,#137dbb,#1944a8 65%,#102b70); color: white; overflow: hidden; }
-.requester-hero .ant-card-body { min-height: 225px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px; }
-.requester-hero .ant-typography { color: white; max-width: 640px; }
-.requester-hero .ant-typography:last-of-type { opacity: .88; }
-.requester-eyebrow { color: #bce7ff; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
-.requester-hero-icon { font-size: 130px; opacity: .13; }
-.requester-loading { text-align: center; padding: 36px; }
-.requester-eyebrow-text { color: #2563eb; font-size: 11px; font-weight: 700; letter-spacing: .1em; }
-.requester-code { color: #2563eb; }
-.requester-filters { margin-bottom: 18px; }
-.requester-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
-.requester-description { white-space: pre-wrap; overflow-wrap: anywhere; }
-.requester-comments { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
-.requester-comment { padding: 14px 16px; border-radius: 12px; background: #f3f7fd; border: 1px solid #e5edf8; }
-.requester-comment .ant-typography { margin: 8px 0 0; }
-.requester-comment-form, .requester-reopen-form { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 18px; }
-.requester-deadline { margin-top: 18px; }
-.requester-action-alert { margin-bottom: 14px; }
-@media(max-width: 600px) { .requester-hero .ant-card-body { min-height: 0; padding: 24px; } .requester-hero-icon { display: none; } }
+.requester-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.requester-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.requester-heading .ant-typography {
+  margin: 0 0 6px;
+}
+
+.requester-card,
+.requester-stats .ant-card {
+  border: 1px solid #e4ebf5;
+  box-shadow: 0 8px 24px rgba(24, 50, 95, 0.04);
+  border-radius: 16px;
+}
+
+.requester-hero {
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(115deg, #137dbb, #1944a8 65%, #102b70);
+  color: white;
+  overflow: hidden;
+}
+
+.requester-hero .ant-card-body {
+  min-height: 225px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+}
+
+.requester-hero .ant-typography {
+  color: white;
+  max-width: 640px;
+}
+
+.requester-hero .ant-typography:last-of-type {
+  opacity: 0.9;
+}
+
+.requester-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.requester-hero-btn-primary {
+  background: #ffffff !important;
+  border-color: #ffffff !important;
+  color: #102b70 !important;
+  font-weight: 600 !important;
+}
+
+.requester-hero-btn-primary:hover {
+  background: #eff6ff !important;
+  border-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+.requester-hero-btn-secondary {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.requester-hero-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.24) !important;
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+}
+
+.requester-eyebrow {
+  color: #bce7ff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.requester-hero-icon {
+  font-size: 130px;
+  opacity: 0.13;
+}
+
+.requester-action-card {
+  height: 100%;
+  border: 1px solid #e4ebf5;
+  border-radius: 16px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  cursor: pointer;
+}
+
+.requester-action-card:hover {
+  transform: translateY(-2px);
+  border-color: #93c5fd;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.08);
+}
+
+.requester-loading {
+  text-align: center;
+  padding: 36px;
+}
+
+.requester-eyebrow-text {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.requester-code {
+  color: #2563eb;
+}
+
+.requester-filters {
+  margin-bottom: 14px;
+}
+
+.requester-quick-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.requester-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.requester-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.requester-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.requester-comment {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f3f7fd;
+  border: 1px solid #e5edf8;
+}
+
+.requester-comment.is-own {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.requester-comment .ant-typography {
+  margin: 8px 0 0;
+}
+
+.requester-comment-form,
+.requester-reopen-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.requester-deadline {
+  margin-top: 18px;
+}
+
+.requester-action-alert {
+  margin-bottom: 14px;
+}
+
+.requester-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.requester-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.requester-summary-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .requester-hero .ant-card-body {
+    min-height: 0;
+    padding: 24px;
+  }
+
+  .requester-hero-icon {
+    display: none;
+  }
+}
