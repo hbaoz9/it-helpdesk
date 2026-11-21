@@ -25,5 +25,7 @@ export const menu = [
   { path: '/supervisor/queue', label: 'Hàng đợi Ticket', workspace: 'supervisor' },
   { path: '/supervisor/assignments', label: 'Phân công', workspace: 'supervisor' },
   { path: '/supervisor/dashboard', label: 'Tất cả Ticket', workspace: 'supervisor' },
-  { path: '/admin', label: 'Tổng quan quản trị', workspace: 'admin' },
+  { path: '/admin', label: 'Tài khoản & Vai trò', workspace: 'admin' },
+  { path: '/admin/categories', label: 'Danh mục sự cố', workspace: 'admin' },
+  { path: '/admin/sla', label: 'Chính sách SLA', workspace: 'admin' },
 ] as const satisfies ReadonlyArray<{ path: string; label: string; workspace: Workspace }>;

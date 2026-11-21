@@ -49,6 +49,9 @@ export default function AppRouter() {
     </Route>
     <Route path="/admin" element={<RequireRole roles={['ADMIN']}><AppShell workspace="admin" /></RequireRole>}>
       <Route index element={<AdminHomePage />} />
+      <Route path="users" element={<AdminHomePage />} />
+      <Route path="categories" element={<AdminHomePage />} />
+      <Route path="sla" element={<AdminHomePage />} />
     </Route>
     <Route path="*" element={<EntryRoute />} />
   </Routes></BrowserRouter>;

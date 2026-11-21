@@ -1,0 +1,159 @@
+import { apiRequest } from './client';
+import type {
+  AdminCategoryRecord,
+  AdminSlaPolicyRecord,
+  AdminUserRecord,
+  RoleCode,
+} from './types';
+
+export interface AdminUsersFilter {
+  search?: string;
+  role?: RoleCode | '';
+  active?: 'true' | 'false' | '';
+}
+
+export interface CreateAdminUserPayload {
+  email: string;
+  fullName: string;
+  password: string;
+  roles: RoleCode[];
+  active: boolean;
+}
+
+export interface UpdateAdminUserPayload {
+  fullName?: string;
+  roles?: RoleCode[];
+  active?: boolean;
+  password?: string;
+}
+
+export interface AdminCategoriesFilter {
+  search?: string;
+  active?: 'true' | 'false' | '';
+}
+
+export interface CreateAdminCategoryPayload {
+  name: string;
+  active: boolean;
+}
+
+export interface UpdateAdminCategoryPayload {
+  name?: string;
+  active?: boolean;
+}
+
+export interface UpdateSlaPolicyPayload {
+  responseMinutes: number;
+  resolutionMinutes: number;
+  reason?: string;
+}
+
+function buildQuery(params: Record<string, string | undefined>): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value && value.trim().length > 0) {
+      searchParams.set(key, value.trim());
+    }
+  }
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export async function getAdminUsers(
+  filter: AdminUsersFilter = {},
+): Promise<AdminUserRecord[]> {
+  const query = buildQuery({
+    search: filter.search,
+    role: filter.role,
+    active: filter.active,
+  });
+  const result = await apiRequest<{ users: AdminUserRecord[] }>(
+    `/admin/users${query}`,
+  );
+  return result.users;
+}
+
+export async function createAdminUser(
+  payload: CreateAdminUserPayload,
+): Promise<AdminUserRecord> {
+  const result = await apiRequest<{ user: AdminUserRecord }>('/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return result.user;
+}
+
+export async function updateAdminUser(
+  id: string,
+  payload: UpdateAdminUserPayload,
+): Promise<AdminUserRecord> {
+  const result = await apiRequest<{ user: AdminUserRecord }>(
+    `/admin/users/${id}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.user;
+}
+
+export async function getAdminCategories(
+  filter: AdminCategoriesFilter = {},
+): Promise<AdminCategoryRecord[]> {
+  const query = buildQuery({
+    search: filter.search,
+    active: filter.active,
+  });
+  const result = await apiRequest<{ categories: AdminCategoryRecord[] }>(
+    `/admin/categories${query}`,
+  );
+  return result.categories;
+}
+
+export async function createAdminCategory(
+  payload: CreateAdminCategoryPayload,
+): Promise<AdminCategoryRecord> {
+  const result = await apiRequest<{ category: AdminCategoryRecord }>(
+    '/admin/categories',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.category;
+}
+
+export async function updateAdminCategory(
+  id: string,
+  payload: UpdateAdminCategoryPayload,
+): Promise<AdminCategoryRecord> {
+  const result = await apiRequest<{ category: AdminCategoryRecord }>(
+    `/admin/categories/${id}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.category;
+}
+
+export async function getAdminSlaPolicies(): Promise<AdminSlaPolicyRecord[]> {
+  const result = await apiRequest<{ slaPolicies: AdminSlaPolicyRecord[] }>(
+    '/admin/sla-policies',
+  );
+  return result.slaPolicies;
+}
+
+export async function updateAdminSlaPolicy(
+  id: string,
+  payload: UpdateSlaPolicyPayload,
+): Promise<AdminSlaPolicyRecord> {
+  const result = await apiRequest<{ slaPolicy: AdminSlaPolicyRecord }>(
+    `/admin/sla-policies/${id}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.slaPolicy;
+}

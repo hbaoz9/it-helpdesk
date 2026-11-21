@@ -28,6 +28,14 @@ HttpOnly, SameSite=Lax session cookie.
 | `POST` | `/api/v1/auth/login` | Public |
 | `POST` | `/api/v1/auth/logout` | Clears the session cookie |
 | `GET` | `/api/v1/auth/me` | Authenticated |
+| `GET` | `/api/v1/admin/users` | Administrator |
+| `POST` | `/api/v1/admin/users` | Administrator; provisions an internal account |
+| `PATCH` | `/api/v1/admin/users/:id` | Administrator; updates roles, status, or password |
+| `GET` | `/api/v1/admin/categories` | Administrator; lists all categories with ticket counts |
+| `POST` | `/api/v1/admin/categories` | Administrator; creates a category |
+| `PATCH` | `/api/v1/admin/categories/:id` | Administrator; renames or activates/deactivates a category |
+| `GET` | `/api/v1/admin/sla-policies` | Administrator; lists SLA policies (P1–P4) |
+| `PATCH` | `/api/v1/admin/sla-policies/:id` | Administrator; updates SLA policy targets and logs audit |
 | `GET` | `/api/v1/categories` | Public; active categories |
 | `GET` | `/api/v1/tickets` | Authenticated; scope depends on role |
 | `POST` | `/api/v1/tickets` | Requester |

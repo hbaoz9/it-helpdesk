@@ -16,7 +16,7 @@ const icons: Record<string, ReactNode> = {
   '/technician': <HomeOutlined />, '/technician/tickets': <UnorderedListOutlined />,
   '/supervisor': <HomeOutlined />, '/supervisor/queue': <UnorderedListOutlined />,
   '/supervisor/assignments': <TeamOutlined />, '/supervisor/dashboard': <BarChartOutlined />,
-  '/admin': <SettingOutlined />,
+  '/admin': <TeamOutlined />, '/admin/categories': <UnorderedListOutlined />, '/admin/sla': <SettingOutlined />,
 };
 
 export default function AppShell({ workspace }: { workspace: Workspace }) {
