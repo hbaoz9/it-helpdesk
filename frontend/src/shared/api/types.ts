@@ -37,7 +37,7 @@ export interface TicketRecord {
   priority: TicketPriority;
   status: TicketStatus;
   category: { id: string; name: string };
-  requester: { id: string; fullName: string };
+  requester: { id: string; fullName: string; email?: string };
   assignee: { id: string; fullName: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -128,4 +128,13 @@ export interface SupervisorDashboardSummary {
     met: number;
   };
   workloadByTechnician: SupervisorTechnicianSummary[];
+}
+
+export interface TechnicianTicketSummary {
+  total: number;
+  inProgress: number;
+  waitingRequester: number;
+  resolved: number;
+  highPriority: number;
+  requesterReplies: number;
 }

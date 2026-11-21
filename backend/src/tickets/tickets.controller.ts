@@ -21,6 +21,7 @@ import {
   OverridePriorityDto,
   TriageTicketDto,
 } from './dto/supervisor-ticket.dto.js';
+import { TicketTextActionDto } from './dto/ticket-text-action.dto.js';
 import { TicketsService } from './tickets.service.js';
 
 @UseGuards(AuthGuard, RolesGuard)
@@ -71,6 +72,12 @@ export class TicketsController {
   @Get('supervisor/technicians')
   listTechnicians(@Req() request: AuthenticatedRequest) {
     return this.ticketsService.listTechnicians(request.user);
+  }
+
+  @Roles('TECHNICIAN')
+  @Get('technician/summary')
+  getTechnicianSummary(@Req() request: AuthenticatedRequest) {
+    return this.ticketsService.getTechnicianSummary(request.user);
   }
 
   @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR')
@@ -158,6 +165,70 @@ export class TicketsController {
       request.user,
       id,
       OverridePriorityDto.validate(input),
+    );
+  }
+
+  @Roles('TECHNICIAN')
+  @Get(':id/technician-activity')
+  getTechnicianActivity(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.ticketsService.getTechnicianActivity(request.user, id);
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/start')
+  startAssignedTicket(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.startAssignedTicket(request.user, id, TicketActionDto.validate(input));
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/technician-comments')
+  addTechnicianComment(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.addTechnicianComment(
+      request.user, id, TicketTextActionDto.validate(input, 'Comment'),
+    );
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/notes')
+  addTechnicianNote(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.addTechnicianNote(
+      request.user, id, TicketTextActionDto.validate(input, 'Note'),
+    );
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/request-information')
+  requestInformation(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.requestInformation(
+      request.user, id, TicketTextActionDto.validate(input, 'Information request'),
+    );
+  }
+
+  @Roles('TECHNICIAN')
+  @Post(':id/resolve')
+  resolveAssignedTicket(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: unknown,
+  ) {
+    return this.ticketsService.resolveAssignedTicket(
+      request.user, id, TicketTextActionDto.validate(input, 'Resolution'),
     );
   }
 

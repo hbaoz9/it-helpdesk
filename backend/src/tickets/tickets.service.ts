@@ -67,6 +67,7 @@ const OPEN_TICKET_STATUSES: TicketStatus[] = [
   'IN_PROGRESS',
   'WAITING_REQUESTER',
 ];
+import type { TicketTextActionDto } from './dto/ticket-text-action.dto.js';
 
 @Injectable()
 export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -154,6 +155,9 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
     if (query.scope === 'requested') {
       this.requireRequester(user);
       where = { requesterId: user.id };
+    } else if (query.scope === 'assigned') {
+      this.requireTechnician(user);
+      where = { assigneeId: user.id };
     } else {
       where = { AND: [this.accessScope(user)] };
     }
@@ -182,12 +186,15 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
     });
   }
 
-  async findById(user: AuthenticatedUser, id: string, scope?: 'requested') {
+  async findById(user: AuthenticatedUser, id: string, scope?: 'requested' | 'assigned') {
     this.requireTicketRole(user);
     let where: Prisma.TicketWhereInput;
     if (scope === 'requested') {
       this.requireRequester(user);
       where = { id, requesterId: user.id };
+    } else if (scope === 'assigned') {
+      this.requireTechnician(user);
+      where = { id, assigneeId: user.id };
     } else {
       where = { id, AND: [this.accessScope(user)] };
     }
@@ -196,7 +203,7 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
       where,
       include: {
         category: true,
-        requester: { select: { id: true, fullName: true } },
+        requester: { select: { id: true, fullName: true, email: true } },
         assignee: { select: { id: true, fullName: true } },
       },
     });
@@ -204,6 +211,164 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
       throw new NotFoundException('Ticket not found');
     }
     return ticket;
+  }
+
+  async getTechnicianSummary(user: AuthenticatedUser) {
+    this.requireTechnician(user);
+    const resolvedCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [total, inProgress, waitingRequester, resolved, highPriority, requesterReplyActivities] = await Promise.all([
+      this.prisma.ticket.count({ where: { assigneeId: user.id } }),
+      this.prisma.ticket.count({ where: { assigneeId: user.id, status: 'IN_PROGRESS' } }),
+      this.prisma.ticket.count({ where: { assigneeId: user.id, status: 'WAITING_REQUESTER' } }),
+      this.prisma.ticket.count({
+        where: {
+          assigneeId: user.id,
+          status: { in: ['RESOLVED', 'CLOSED'] },
+          resolvedAt: { gte: resolvedCutoff },
+        },
+      }),
+      this.prisma.ticket.count({ where: { assigneeId: user.id, status: { notIn: ['RESOLVED', 'CLOSED', 'REJECTED'] }, priority: 'P1' } }),
+      this.prisma.ticketActivity.findMany({
+        where: {
+          type: 'STATUS',
+          visibility: 'PUBLIC',
+          fromStatus: 'WAITING_REQUESTER',
+          toStatus: 'IN_PROGRESS',
+          ticket: { assigneeId: user.id, status: 'IN_PROGRESS' },
+        },
+        select: { ticketId: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+      }),
+    ]);
+    const requesterReplies = new Set(requesterReplyActivities.map((activity) => activity.ticketId)).size;
+    return { total, inProgress, waitingRequester, resolved, highPriority, requesterReplies };
+  }
+
+  async getTechnicianActivity(user: AuthenticatedUser, id: string) {
+    this.requireTechnician(user);
+    await this.assertAssignedTicket(this.prisma.ticket, user, id);
+    return this.prisma.ticketActivity.findMany({
+      where: { ticketId: id },
+      select: {
+        id: true,
+        type: true,
+        visibility: true,
+        content: true,
+        fromStatus: true,
+        toStatus: true,
+        createdAt: true,
+        actor: { select: { id: true, fullName: true } },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async startAssignedTicket(user: AuthenticatedUser, id: string, dto: TicketActionDto) {
+    this.requireTechnician(user);
+    await this.prisma.$transaction(async (tx) => {
+      const ticket = await this.assertAssignedTicket(tx.ticket, user, id);
+      if (ticket.status !== 'ASSIGNED' && ticket.status !== 'WAITING_REQUESTER') {
+        throw new ConflictException('Only assigned or requester-waiting tickets can be started');
+      }
+      const updated = await tx.ticket.updateMany({
+        where: { id, assigneeId: user.id, status: ticket.status, version: dto.version },
+        data: { status: 'IN_PROGRESS', version: { increment: 1 } },
+      });
+      if (updated.count !== 1) throw new ConflictException('Ticket changed. Reload and try again');
+      await tx.ticketActivity.create({
+        data: {
+          ticketId: id, actorId: user.id, type: 'STATUS', visibility: 'PUBLIC',
+          fromStatus: ticket.status, toStatus: 'IN_PROGRESS',
+        },
+      });
+    });
+    return this.findById(user, id, 'assigned');
+  }
+
+  async addTechnicianComment(user: AuthenticatedUser, id: string, dto: TicketTextActionDto) {
+    return this.addAssignedComment(user, id, dto, 'PUBLIC');
+  }
+
+  async addTechnicianNote(user: AuthenticatedUser, id: string, dto: TicketTextActionDto) {
+    return this.addAssignedComment(user, id, dto, 'INTERNAL');
+  }
+
+  private async addAssignedComment(
+    user: AuthenticatedUser,
+    id: string,
+    dto: TicketTextActionDto,
+    visibility: 'PUBLIC' | 'INTERNAL',
+  ) {
+    this.requireTechnician(user);
+    return this.prisma.$transaction(async (tx) => {
+      const ticket = await this.assertAssignedTicket(tx.ticket, user, id);
+      if (ticket.status !== 'IN_PROGRESS') {
+        throw new ConflictException('Ticket must be in progress to add a comment or note');
+      }
+      const updated = await tx.ticket.updateMany({
+        where: { id, assigneeId: user.id, status: 'IN_PROGRESS', version: dto.version },
+        data: { version: { increment: 1 } },
+      });
+      if (updated.count !== 1) throw new ConflictException('Ticket changed. Reload and try again');
+      return tx.ticketActivity.create({
+        data: {
+          ticketId: id, actorId: user.id, type: 'COMMENT', visibility, content: dto.content,
+        },
+        select: {
+          id: true, type: true, visibility: true, content: true, fromStatus: true, toStatus: true,
+          createdAt: true, actor: { select: { id: true, fullName: true } },
+        },
+      });
+    });
+  }
+
+  async requestInformation(user: AuthenticatedUser, id: string, dto: TicketTextActionDto) {
+    this.requireTechnician(user);
+    await this.prisma.$transaction(async (tx) => {
+      const ticket = await this.assertAssignedTicket(tx.ticket, user, id);
+      if (ticket.status !== 'IN_PROGRESS') {
+        throw new ConflictException('Only in-progress tickets can request information');
+      }
+      const updated = await tx.ticket.updateMany({
+        where: { id, assigneeId: user.id, status: 'IN_PROGRESS', version: dto.version },
+        data: { status: 'WAITING_REQUESTER', version: { increment: 1 } },
+      });
+      if (updated.count !== 1) throw new ConflictException('Ticket changed. Reload and try again');
+      await tx.ticketActivity.create({
+        data: {
+          ticketId: id, actorId: user.id, type: 'STATUS', visibility: 'PUBLIC',
+          content: dto.content, fromStatus: 'IN_PROGRESS', toStatus: 'WAITING_REQUESTER',
+        },
+      });
+    });
+    return this.findById(user, id, 'assigned');
+  }
+
+  async resolveAssignedTicket(user: AuthenticatedUser, id: string, dto: TicketTextActionDto) {
+    this.requireTechnician(user);
+    await this.prisma.$transaction(async (tx) => {
+      const ticket = await this.assertAssignedTicket(tx.ticket, user, id);
+      if (ticket.status !== 'IN_PROGRESS') {
+        throw new ConflictException('Only in-progress tickets can be resolved');
+      }
+      const now = new Date();
+      const updated = await tx.ticket.updateMany({
+        where: { id, assigneeId: user.id, status: 'IN_PROGRESS', version: dto.version },
+        data: {
+          status: 'RESOLVED', resolutionNote: dto.content, resolvedAt: now,
+          closedAt: null, version: { increment: 1 },
+        },
+      });
+      if (updated.count !== 1) throw new ConflictException('Ticket changed. Reload and try again');
+      await tx.ticketActivity.create({
+        data: {
+          ticketId: id, actorId: user.id, type: 'STATUS', visibility: 'PUBLIC',
+          content: dto.content, fromStatus: 'IN_PROGRESS', toStatus: 'RESOLVED', createdAt: now,
+        },
+      });
+    });
+    return this.findById(user, id, 'assigned');
   }
 
   async countRequested(user: AuthenticatedUser, query: TicketQueryDto) {
@@ -266,10 +431,24 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
           version: dto.version,
           status: { in: OPEN_TICKET_STATUSES },
         },
-        data: { version: { increment: 1 } },
+        data: ticket.status === 'WAITING_REQUESTER'
+          ? { status: 'IN_PROGRESS', version: { increment: 1 } }
+          : { version: { increment: 1 } },
       });
       if (updated.count !== 1) {
         throw new ConflictException('Ticket changed. Reload and try again');
+      }
+      if (ticket.status === 'WAITING_REQUESTER') {
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: id,
+            actorId: user.id,
+            type: 'STATUS',
+            visibility: 'PUBLIC',
+            fromStatus: 'WAITING_REQUESTER',
+            toStatus: 'IN_PROGRESS',
+          },
+        });
       }
       return tx.ticketActivity.create({
         data: {
@@ -431,7 +610,7 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
       },
       include: {
         category: true,
-        requester: { select: { id: true, fullName: true } },
+        requester: { select: { id: true, fullName: true, email: true } },
         assignee: { select: { id: true, fullName: true } },
       },
     });
@@ -1000,6 +1179,19 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
     return scopes.length === 1 ? scopes[0] : { OR: scopes };
   }
 
+  private async assertAssignedTicket(
+    ticketStore: Prisma.TransactionClient['ticket'],
+    user: AuthenticatedUser,
+    id: string,
+  ) {
+    const ticket = await ticketStore.findFirst({
+      where: { id, assigneeId: user.id },
+      select: { id: true, status: true },
+    });
+    if (!ticket) throw new NotFoundException('Ticket not found');
+    return ticket;
+  }
+
   private requireTicketRole(user: AuthenticatedUser): void {
     if (
       !user.roles.some((role) =>
@@ -1019,6 +1211,12 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
   private requireSupervisor(user: AuthenticatedUser): void {
     if (!user.roles.includes('SUPERVISOR')) {
       throw new ForbiddenException('Action requires SUPERVISOR role');
+    }
+  }
+
+  private requireTechnician(user: AuthenticatedUser): void {
+    if (!user.roles.includes('TECHNICIAN')) {
+      throw new ForbiddenException('Technician scope requires TECHNICIAN role');
     }
   }
 }
