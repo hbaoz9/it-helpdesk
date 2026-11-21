@@ -1,5 +1,7 @@
 const API_BASE_URL = '/api/v1';
 
+export const UNAUTHORIZED_EVENT = 'smartdesk:unauthorized';
+
 export class ApiError extends Error {
   readonly status: number;
 
@@ -48,6 +50,16 @@ export async function apiRequest<T>(
     } catch {
       // Keep the HTTP status message when the server does not return JSON.
     }
+
+    if (
+      response.status === 401 &&
+      path !== '/auth/login' &&
+      path !== '/auth/me' &&
+      typeof window !== 'undefined'
+    ) {
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    }
+
     throw new ApiError(message, response.status);
   }
 

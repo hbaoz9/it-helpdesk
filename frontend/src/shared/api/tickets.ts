@@ -18,6 +18,7 @@ export interface CreateTicketInput {
 
 export interface TicketFilters {
   scope?: 'requested';
+  categoryId?: string;
   status?: TicketStatus;
   priority?: TicketRecord['priority'];
   search?: string;

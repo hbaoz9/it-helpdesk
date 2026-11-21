@@ -17,8 +17,13 @@ import {
 } from 'antd';
 import { FileAddOutlined, ReloadOutlined, RobotOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { getRequesterTicketCount, getTickets } from '../../shared/api/tickets';
+import {
+  getCategories,
+  getRequesterTicketCount,
+  getTickets,
+} from '../../shared/api/tickets';
 import type {
+  Category,
   TicketPriority,
   TicketRecord,
   TicketStatus,
@@ -62,6 +67,8 @@ export default function MyTicketsPage() {
   const [searchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState<string>('ALL');
+  const [categories, setCategories] = useState<Category[]>([]);
   const [status, setStatus] = useState<'ALL' | TicketStatus>('ALL');
   const [priority, setPriority] = useState<'ALL' | TicketPriority>('ALL');
   const [page, setPage] = useState(1);
@@ -70,6 +77,20 @@ export default function MyTicketsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    getCategories()
+      .then((result) => {
+        if (active) setCategories(result);
+      })
+      .catch(() => {
+        /* Category filter remains optional if categories fail to load */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -88,6 +109,7 @@ export default function MyTicketsPage() {
     const filters = {
       scope: 'requested' as const,
       search: search || undefined,
+      categoryId: categoryId === 'ALL' ? undefined : categoryId,
       status: status === 'ALL' ? undefined : status,
       priority: priority === 'ALL' ? undefined : priority,
       limit: PAGE_SIZE,
@@ -117,7 +139,7 @@ export default function MyTicketsPage() {
     return () => {
       active = false;
     };
-  }, [search, status, priority, page, retry, user?.id]);
+  }, [search, categoryId, status, priority, page, retry, user?.id]);
 
   // Keep links created with ?selected=INC-... working smoothly.
   useEffect(() => {
@@ -144,16 +166,25 @@ export default function MyTicketsPage() {
   }, [searchParams, navigate, user?.id]);
 
   const hasActiveFilters =
-    Boolean(searchInput.trim()) || status !== 'ALL' || priority !== 'ALL';
+    Boolean(searchInput.trim()) ||
+    categoryId !== 'ALL' ||
+    status !== 'ALL' ||
+    priority !== 'ALL';
 
   const handleResetFilters = () => {
     setLoading(true);
     setSearchInput('');
     setSearch('');
+    setCategoryId('ALL');
     setStatus('ALL');
     setPriority('ALL');
     setPage(1);
   };
+
+  const categoryOptions = [
+    { value: 'ALL', label: 'Tất cả danh mục' },
+    ...categories.map((cat) => ({ value: cat.id, label: cat.name })),
+  ];
 
   const columns: ColumnsType<TicketRecord> = [
     {
@@ -303,7 +334,7 @@ export default function MyTicketsPage() {
         </div>
 
         <Row gutter={[12, 12]} className="requester-filters">
-          <Col xs={24} md={10}>
+          <Col xs={24} md={9}>
             <Input.Search
               allowClear
               aria-label="Tìm yêu cầu"
@@ -312,7 +343,20 @@ export default function MyTicketsPage() {
               onChange={(event) => setSearchInput(event.target.value)}
             />
           </Col>
-          <Col xs={24} sm={12} md={7}>
+          <Col xs={24} sm={8} md={5}>
+            <Select
+              aria-label="Lọc danh mục"
+              style={{ width: '100%' }}
+              value={categoryId}
+              options={categoryOptions}
+              onChange={(value) => {
+                setLoading(true);
+                setCategoryId(value);
+                setPage(1);
+              }}
+            />
+          </Col>
+          <Col xs={24} sm={8} md={5}>
             <Select
               aria-label="Lọc trạng thái"
               style={{ width: '100%' }}
@@ -325,7 +369,7 @@ export default function MyTicketsPage() {
               }}
             />
           </Col>
-          <Col xs={24} sm={12} md={7}>
+          <Col xs={24} sm={8} md={5}>
             <Select
               aria-label="Lọc ưu tiên"
               style={{ width: '100%' }}
