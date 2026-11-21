@@ -1,0 +1,549 @@
+.tech-page {
+  min-height: calc(100vh - 152px);
+  color: #172b4d;
+}
+
+.tech-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.tech-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+
+.tech-page-heading h1 {
+  margin: 0;
+  color: #172b4d;
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -1px;
+}
+
+.tech-page-heading p {
+  margin: 8px 0 0;
+  color: #71809a;
+  font-size: 14px;
+}
+
+.tech-primary-button,
+.tech-secondary-button {
+  height: 44px;
+  border-radius: 10px;
+  border: 0;
+  padding: 0 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tech-primary-button {
+  color: #fff;
+  background: #2563eb;
+  box-shadow: 0 8px 20px rgba(37,99,235,.16);
+}
+
+.tech-secondary-button {
+  color: #344866;
+  background: #fff;
+  border: 1px solid #e3e9f3;
+}
+
+.tech-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.tech-stat-card,
+.tech-card {
+  background: #fff;
+  border: 1px solid #edf1f7;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(24,50,95,.035);
+}
+
+.tech-stat-card {
+  min-height: 126px;
+  padding: 20px;
+  width: 100%;
+  border: 1px solid #edf1f7;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+
+.tech-stat-card:hover,
+.tech-stat-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: #dbe6f8;
+  box-shadow: 0 12px 26px rgba(37,99,235,.08);
+  outline: none;
+}
+
+.tech-stat-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #344866;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tech-stat-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  color: #71809a;
+  background: #f5f7fb;
+}
+
+.tech-stat-value {
+  margin-top: 12px;
+  color: #172b4d;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.tech-stat-caption {
+  display: block;
+  margin-top: 9px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.tech-stat-card.is-progress .tech-stat-top,
+.tech-stat-card.is-progress .tech-stat-caption {
+  color: #2563eb;
+}
+
+.tech-stat-card.is-progress .tech-stat-icon {
+  color: #2563eb;
+  background: #eaf1ff;
+}
+
+.tech-stat-card.is-high .tech-stat-top,
+.tech-stat-card.is-high .tech-stat-caption {
+  color: #dc2626;
+}
+
+.tech-stat-card.is-high .tech-stat-icon {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.tech-stat-card.is-waiting .tech-stat-top,
+.tech-stat-card.is-waiting .tech-stat-caption {
+  color: #b45309;
+}
+
+.tech-stat-card.is-waiting .tech-stat-icon {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.tech-home-grid,
+.tech-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+}
+
+.tech-card {
+  overflow: hidden;
+}
+
+.tech-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.tech-card-header h2,
+.tech-card-header h3 {
+  margin: 0;
+  color: #172b4d;
+  font-size: 16px;
+}
+
+.tech-text-link {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tech-ticket-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.tech-ticket-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tech-ticket-table th {
+  height: 48px;
+  padding: 0 12px;
+  color: #71809a;
+  background: #fbfcfe;
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tech-ticket-table td {
+  height: 82px;
+  padding: 10px 12px;
+  border-top: 1px solid #edf1f7;
+  color: #344866;
+  font-size: 12px;
+  vertical-align: middle;
+  line-height: 1.35;
+}
+
+.tech-ticket-table td:last-child,
+.tech-ticket-table th:last-child {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.tech-ticket-code {
+  color: #2563eb;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.tech-ticket-title {
+  display: block;
+  overflow: hidden;
+  color: #344866;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tech-ticket-subtitle {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.tech-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tech-badge-p1 { color: #dc2626; background: #fee2e2; }
+.tech-badge-p2 { color: #ea580c; background: #ffedd5; }
+.tech-badge-p3 { color: #d97706; background: #fef3c7; }
+.tech-badge-p4 { color: #16a34a; background: #dcfce7; }
+.tech-badge-assigned { color: #2563eb; background: #eaf1ff; }
+.tech-badge-progress { color: #2563eb; background: #eaf1ff; }
+.tech-badge-resolved { color: #16a34a; background: #dcfce7; }
+.tech-badge-waiting { color: #d97706; background: #fef3c7; }
+.tech-badge-neutral { color: #64748b; background: #f1f5f9; }
+
+.tech-reminder-card {
+  margin-bottom: 16px;
+  padding: 18px;
+  border-radius: 14px;
+  background: #edf3ff;
+  color: #71809a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.tech-reminder-card-action {
+  display: block;
+  margin-top: 8px;
+  border: 0;
+  padding: 0;
+  color: #2563eb;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tech-reminder-card strong {
+  color: #344866;
+}
+
+.tech-checklist {
+  padding: 10px 20px 18px;
+}
+
+.tech-checklist-item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.tech-checklist-item:last-child {
+  border-bottom: 0;
+}
+
+.tech-checklist-number {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbe6f8;
+  border-radius: 8px;
+  color: #2563eb;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.tech-checklist-item strong {
+  display: block;
+  color: #172b4d;
+  font-size: 13px;
+}
+
+.tech-checklist-item span {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.tech-checklist-item .tech-checklist-number {
+  margin-top: 0;
+  color: #2563eb;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tech-checklist-empty {
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 20px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.tech-checklist-empty .anticon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 50%;
+  color: #16a34a;
+  background: #dcfce7;
+}
+
+.tech-checklist-empty strong {
+  color: #344866;
+  font-size: 13px;
+}
+
+.tech-checklist-empty span {
+  font-size: 12px;
+}
+
+.tech-filter-card {
+  margin-bottom: 18px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #edf1f7;
+  border-radius: 16px;
+}
+
+.tech-filter-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 240px));
+  gap: 12px;
+}
+
+.tech-filter-row .ant-input,
+.tech-filter-row .ant-select-selector {
+  height: 40px !important;
+  border-radius: 9px !important;
+}
+
+.tech-detail-title-row {
+  margin-bottom: 20px;
+}
+
+.tech-detail-title-row .tech-eyebrow {
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.tech-detail-title-row h1 {
+  margin: 0;
+  color: #172b4d;
+  font-size: 28px;
+}
+
+.tech-detail-title-row p {
+  margin: 6px 0 0;
+  color: #71809a;
+}
+
+.tech-progress-card {
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.tech-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.tech-progress-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #fbfcfe;
+  border: 1px solid #edf1f7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tech-progress-check {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  border-radius: 50%;
+  color: #2563eb;
+  background: #eef4ff;
+}
+
+.tech-progress-item small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.tech-action-card {
+  margin-bottom: 16px;
+  padding: 18px;
+  min-width: 0;
+}
+
+.tech-action-card h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.tech-action-card .tech-primary-button,
+.tech-action-card .tech-secondary-button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.tech-action-card textarea {
+  margin-top: 8px;
+  padding-bottom: 34px !important;
+  border-radius: 10px;
+  max-width: 100%;
+}
+
+.tech-action-card .ant-input-textarea-show-count::after,
+.tech-card .ant-input-textarea-show-count::after {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 18px;
+  background: #fff;
+  padding-left: 6px;
+  z-index: 2;
+}
+
+.tech-action-card .ant-input-textarea,
+.tech-card .ant-input-textarea {
+  position: relative;
+}
+
+.tech-public-alert {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: #64748b;
+  background: #fff7ed;
+  border: 1px solid #ffedd5;
+  font-size: 12px;
+}
+
+.tech-history-card {
+  margin-top: 16px;
+  padding: 18px;
+}
+
+.tech-history-card .ant-timeline-item-content {
+  margin-inline-start: 8px;
+}
+
+.tech-resolution-alert .ant-alert-description,
+.tech-history-card .ant-typography,
+.tech-card .ant-typography {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .tech-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tech-home-grid,
+  .tech-detail-grid { grid-template-columns: 1fr; }
+  .tech-detail-grid aside { order: -1; }
+}
+
+@media (max-width: 700px) {
+  .tech-page-heading { align-items: flex-start; flex-direction: column; }
+  .tech-stat-grid { grid-template-columns: 1fr 1fr; }
+  .tech-filter-row { grid-template-columns: 1fr; }
+  .tech-progress-grid { grid-template-columns: 1fr; }
+  .tech-ticket-table { min-width: 760px; }
+}

@@ -1,6 +1,6 @@
 .smartdesk-shell { min-height: 100vh; background: #f5f7fb; }
-.smartdesk-sider { background: #fff !important; border-right: 1px solid #e5eaf2; }
-.smartdesk-sidebar { min-height: 100vh; display: flex; flex-direction: column; padding: 22px 12px 16px; background: #fff; }
+.smartdesk-sider { height: 100vh; position: sticky; top: 0; background: #fff !important; border-right: 1px solid #e5eaf2; overflow: hidden; }
+.smartdesk-sidebar { height: 100vh; min-height: 0; display: flex; flex-direction: column; padding: 22px 12px 16px; background: #fff; overflow-y: auto; }
 .smartdesk-brand { display: flex; align-items: center; gap: 11px; padding: 0 12px 32px; color: #172b4d; text-decoration: none; }
 .smartdesk-brand strong { display: block; font-size: 20px; line-height: 1.2; }
 .smartdesk-brand small { color: #71809a; font-size: 11px; }
@@ -10,7 +10,7 @@
 .smartdesk-sidebar .ant-menu-item { margin: 2px 0; width: 100%; font-weight: 600; }
 .smartdesk-sidebar .ant-menu-item-selected { background: #eaf1ff !important; }
 .smartdesk-sidebar-spacer { flex: 1; }
-.smartdesk-sidebar-bottom { border-top: 1px solid #e5eaf2; padding: 18px 12px 0; color: #71809a; font-size: 12px; overflow-wrap: anywhere; }
+.smartdesk-sidebar-bottom { position: sticky; bottom: 0; margin-top: auto; border-top: 1px solid #e5eaf2; padding: 18px 12px 14px; background: #fff; color: #71809a; font-size: 12px; overflow-wrap: anywhere; }
 .smartdesk-main { min-width: 0; background: #f5f7fb; }
 .smartdesk-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; height: 76px; padding: 0 32px; line-height: normal; background: #fff; border-bottom: 1px solid #e5eaf2; }
 .smartdesk-header-left, .smartdesk-header-actions, .smartdesk-account { display: flex; align-items: center; gap: 12px; }

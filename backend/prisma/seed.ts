@@ -2,7 +2,21 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 import { PrismaClient } from '../dist/generated/prisma/client.js';
-import type { RoleCode } from '../dist/generated/prisma/enums.js';
+import type {
+  RoleCode,
+  TicketPriority,
+} from '../dist/generated/prisma/enums.js';
+
+const SLA_POLICIES_SEED: ReadonlyArray<{
+  priority: TicketPriority;
+  responseMinutes: number;
+  resolutionMinutes: number;
+}> = [
+  { priority: 'P1', responseMinutes: 15, resolutionMinutes: 240 },
+  { priority: 'P2', responseMinutes: 60, resolutionMinutes: 480 },
+  { priority: 'P3', responseMinutes: 240, resolutionMinutes: 1440 },
+  { priority: 'P4', responseMinutes: 480, resolutionMinutes: 4320 },
+];
 
 const ROLES_SEED: ReadonlyArray<{
   code: RoleCode;
@@ -148,8 +162,22 @@ async function main(): Promise<void> {
       }
     }
 
+    for (const slaItem of SLA_POLICIES_SEED) {
+      await prisma.slaPolicy.upsert({
+        where: { priority: slaItem.priority },
+        update: {},
+        create: {
+          priority: slaItem.priority,
+          responseMinutes: slaItem.responseMinutes,
+          resolutionMinutes: slaItem.resolutionMinutes,
+          revision: 1,
+          active: true,
+        },
+      });
+    }
+
     console.log(
-      'Seed completed successfully: 4 roles, 4 categories, and 4 local test accounts (Argon2id).',
+      'Seed completed successfully: 4 roles, 4 categories, 4 SLA policies, and 4 local test accounts (Argon2id).',
     );
   } finally {
     await prisma.$disconnect();

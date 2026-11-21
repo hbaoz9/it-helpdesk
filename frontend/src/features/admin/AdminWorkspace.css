@@ -1,0 +1,144 @@
+.adm-header-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 28px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #172b4d 0%, #1e3a8a 60%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.16);
+}
+
+.adm-banner-eyebrow {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #bfdbfe;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.adm-banner-title {
+  margin: 8px 0 4px !important;
+  color: #ffffff !important;
+  font-size: 24px !important;
+  font-weight: 800 !important;
+}
+
+.adm-banner-desc {
+  margin: 0;
+  color: #dbeafe;
+  font-size: 14px;
+  max-width: 680px;
+}
+
+.adm-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.adm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.adm-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.adm-search-input {
+  max-width: 320px;
+  min-width: 220px;
+}
+
+.adm-role-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.adm-policy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.adm-user-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.adm-user-name {
+  font-weight: 700;
+  color: #172b4d;
+}
+
+.adm-user-email {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.adm-sla-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.adm-sla-p1 {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.adm-sla-p2 {
+  background: #fff7ed;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
+}
+
+.adm-sla-p3 {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.adm-sla-p4 {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+@media (max-width: 768px) {
+  .adm-header-banner {
+    padding: 20px;
+  }
+
+  .adm-search-input {
+    max-width: 100%;
+    width: 100%;
+  }
+}

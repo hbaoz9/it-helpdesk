@@ -125,6 +125,7 @@ describe('TicketsModule', () => {
       expect(dto.page).toBe(1);
       expect(dto.limit).toBe(20);
       expect(TicketQueryDto.validate({ scope: 'requested' }).scope).toBe('requested');
+      expect(TicketQueryDto.validate({ scope: 'assigned' }).scope).toBe('assigned');
       expect(() => TicketQueryDto.validate({ scope: 'all' })).toThrow(BadRequestException);
 
       expect(() => TicketQueryDto.validate({ page: '0' })).toThrow(
@@ -153,6 +154,8 @@ describe('TicketsModule', () => {
     for (const method of [
       'findAll', 'findById', 'create', 'countRequested',
       'getRequesterActivity', 'addRequesterComment', 'closeRequesterTicket', 'reopenRequesterTicket',
+      'getTechnicianSummary', 'getTechnicianActivity', 'startAssignedTicket',
+      'addTechnicianComment', 'addTechnicianNote', 'requestInformation', 'resolveAssignedTicket',
     ] as const) {
       const roles = Reflect.getMetadata(REQUIRED_ROLES, ticketsController[method]) as string[];
       expect(roles).not.toContain('ADMIN');
@@ -160,6 +163,13 @@ describe('TicketsModule', () => {
     for (const method of ['getRequesterActivity', 'addRequesterComment', 'closeRequesterTicket', 'reopenRequesterTicket'] as const) {
       const roles = Reflect.getMetadata(REQUIRED_ROLES, ticketsController[method]) as string[];
       expect(roles).toEqual(['REQUESTER']);
+    }
+    for (const method of [
+      'getTechnicianSummary', 'getTechnicianActivity', 'startAssignedTicket',
+      'addTechnicianComment', 'addTechnicianNote', 'requestInformation', 'resolveAssignedTicket',
+    ] as const) {
+      const roles = Reflect.getMetadata(REQUIRED_ROLES, ticketsController[method]) as string[];
+      expect(roles).toEqual(['TECHNICIAN']);
     }
   });
 
@@ -219,6 +229,10 @@ describe('TicketsModule', () => {
     expect(findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { id: 'ticket-id', AND: [{ assigneeId: technician.id }] },
     }));
+    await expect(ticketsService.findById(technician, 'ticket-id', 'assigned')).rejects.toThrow();
+    expect(findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: 'ticket-id', assigneeId: technician.id },
+    }));
   });
 
   it('rejects requester scope when the account has no REQUESTER role', async () => {
@@ -254,8 +268,14 @@ describe('TicketsModule', () => {
   it('keeps Requester Ticket creation and Backend priority calculation available', async () => {
     const categoryId = '10000000-0000-4000-8000-000000000001';
     const create = vi.fn().mockResolvedValue({ code: 'INC-TEST' });
+    const findUnique = vi.fn().mockResolvedValue({
+      id: 'policy-p1', priority: 'P1', revision: 3, active: true,
+      responseMinutes: 15, resolutionMinutes: 240,
+    });
     prismaMock.category = { findFirst: vi.fn().mockResolvedValue({ id: categoryId }) } as unknown as PrismaService['category'];
-    prismaMock.ticket = { create } as unknown as PrismaService['ticket'];
+    prismaMock.$transaction = vi.fn((callback) => callback({
+      ticket: { create }, slaPolicy: { findUnique },
+    })) as unknown as PrismaService['$transaction'];
     const requester = {
       id: 'requester-id', email: 'requester@example.com', fullName: 'Requester', roles: ['REQUESTER' as const],
     };
@@ -265,7 +285,41 @@ describe('TicketsModule', () => {
     });
     await expect(ticketsService.create(requester, dto)).resolves.toEqual({ code: 'INC-TEST' });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ requesterId: requester.id, priority: 'P1' }),
+      data: expect.objectContaining({
+        requesterId: requester.id, priority: 'P1',
+        ticketSla: { create: expect.objectContaining({
+          slaPolicyId: 'policy-p1', policyRevision: 3,
+          responseTargetMinutes: 15, resolutionTargetMinutes: 240,
+          responseDueAt: expect.any(Date), resolutionDueAt: expect.any(Date),
+        }) },
+      }),
     }));
+    const data = create.mock.calls[0][0].data;
+    expect(data.ticketSla.create.responseDueAt.getTime() - data.createdAt.getTime()).toBe(15 * 60_000);
+    expect(data.ticketSla.create.resolutionDueAt.getTime() - data.createdAt.getTime()).toBe(240 * 60_000);
+  });
+
+  it('snapshots each policy revision only for Tickets created after the change', async () => {
+    const categoryId = '10000000-0000-4000-8000-000000000001';
+    const saved: Array<{ ticketSla: { create: { policyRevision: number; responseTargetMinutes: number; responseDueAt: Date } } }> = [];
+    let policy = { id: 'policy-p1', revision: 1, active: true, responseMinutes: 15, resolutionMinutes: 240 };
+    prismaMock.category = { findFirst: vi.fn().mockResolvedValue({ id: categoryId }) } as unknown as PrismaService['category'];
+    prismaMock.$transaction = vi.fn((callback) => callback({
+      slaPolicy: { findUnique: vi.fn(async () => policy) },
+      ticket: { create: vi.fn(async ({ data }) => { saved.push(data); return data; }) },
+    })) as unknown as PrismaService['$transaction'];
+    const requester = {
+      id: 'requester-id', email: 'requester@example.com', fullName: 'Requester', roles: ['REQUESTER' as const],
+    };
+    const dto = CreateTicketDto.validate({
+      title: 'Cannot connect to office Wi-Fi', description: 'Office Wi-Fi has been unavailable since morning',
+      categoryId, impact: 'HIGH', urgency: 'HIGH',
+    });
+    await ticketsService.create(requester, dto);
+    policy = { ...policy, revision: 2, responseMinutes: 30 };
+    await ticketsService.create(requester, dto);
+    expect(saved.map(({ ticketSla }) => [ticketSla.create.policyRevision, ticketSla.create.responseTargetMinutes]))
+      .toEqual([[1, 15], [2, 30]]);
+    expect(saved[0].ticketSla.create.responseDueAt.getTime()).toBeLessThan(saved[1].ticketSla.create.responseDueAt.getTime());
   });
 });

@@ -135,4 +135,16 @@ export class SessionService {
       },
     });
   }
+
+  async revokeUserSessions(userId: string): Promise<void> {
+    await this.prisma.session.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+  }
 }

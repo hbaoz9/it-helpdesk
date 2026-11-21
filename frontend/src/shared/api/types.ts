@@ -11,6 +11,7 @@ export type TicketStatus =
 export type TicketPriority = 'P1' | 'P2' | 'P3' | 'P4';
 export type ImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 export type UrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+export type SlaHealthStatus = 'MET' | 'ON_TRACK' | 'AT_RISK' | 'BREACHED' | 'EXCLUDED';
 
 export interface AuthUser {
   id: string;
@@ -36,7 +37,7 @@ export interface TicketRecord {
   priority: TicketPriority;
   status: TicketStatus;
   category: { id: string; name: string };
-  requester: { id: string; fullName: string };
+  requester: { id: string; fullName: string; email?: string };
   assignee: { id: string; fullName: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -49,9 +50,96 @@ export interface TicketRecord {
 export interface TicketActivity {
   id: string;
   type: 'STATUS' | 'COMMENT';
+  visibility?: 'PUBLIC' | 'INTERNAL';
   content: string | null;
   fromStatus: TicketStatus | null;
   toStatus: TicketStatus | null;
   createdAt: string;
   actor: { id: string; fullName: string } | null;
+}
+
+export interface AdminUserRecord {
+  id: string;
+  email: string;
+  fullName: string;
+  active: boolean;
+  roles: RoleCode[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminCategoryRecord {
+  id: string;
+  name: string;
+  active: boolean;
+  ticketCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminSlaPolicyRecord {
+  id: string;
+  priority: TicketPriority;
+  responseMinutes: number;
+  resolutionMinutes: number;
+  revision: number;
+  active: boolean;
+  updatedAt: string;
+}
+
+export interface TicketSlaSnapshot {
+  ticketId: string;
+  priority: TicketPriority;
+  status: TicketStatus;
+  createdAt: string;
+  deadlineBasis: 'AT_TICKET_CREATION';
+  policyPriority: TicketPriority | null;
+  policyRevision: number;
+  responseTargetMinutes: number;
+  resolutionTargetMinutes: number;
+  responseDueAt: string;
+  resolutionDueAt: string;
+  firstResponseAt: string | null;
+  resolvedAt: string | null;
+  responseStatus: SlaHealthStatus;
+  resolutionStatus: SlaHealthStatus;
+  overallStatus: SlaHealthStatus;
+}
+
+export interface SupervisorTechnicianSummary {
+  id: string;
+  fullName: string;
+  email: string;
+  activeAssignedCount: number;
+  assignedCount: number;
+  inProgressCount: number;
+  waitingRequesterCount: number;
+  resolvedCount: number;
+  closedCount: number;
+}
+
+export interface SupervisorDashboardSummary {
+  totalTickets: number;
+  unassignedCount: number;
+  triageQueueCount: number;
+  byStatus: Record<TicketStatus, number>;
+  byPriority: Record<TicketPriority, number>;
+  sla: {
+    onTrack: number;
+    atRisk: number;
+    breached: number;
+    met: number;
+    excluded: number;
+    unknown: number;
+  };
+  workloadByTechnician: SupervisorTechnicianSummary[];
+}
+
+export interface TechnicianTicketSummary {
+  total: number;
+  inProgress: number;
+  waitingRequester: number;
+  resolved: number;
+  highPriority: number;
+  requesterReplies: number;
 }
