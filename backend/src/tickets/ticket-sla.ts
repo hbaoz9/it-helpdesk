@@ -5,42 +5,23 @@ import type {
 
 export type SlaHealthStatus = 'MET' | 'ON_TRACK' | 'AT_RISK' | 'BREACHED';
 
-export interface SlaPolicyTarget {
-  priority: TicketPriority;
-  responseMinutes: number;
-  resolutionMinutes: number;
+export interface PersistedSlaTarget {
+  policyRevision: number;
+  responseTargetMinutes: number;
+  resolutionTargetMinutes: number;
+  responseDueAt: Date;
+  resolutionDueAt: Date;
+  firstResponseAt: Date | null;
 }
 
 export const SLA_WARNING_RATIO = 0.8;
-
-export const SLA_POLICY_V1: Record<TicketPriority, SlaPolicyTarget> = {
-  P1: {
-    priority: 'P1',
-    responseMinutes: 15,
-    resolutionMinutes: 4 * 60,
-  },
-  P2: {
-    priority: 'P2',
-    responseMinutes: 60,
-    resolutionMinutes: 8 * 60,
-  },
-  P3: {
-    priority: 'P3',
-    responseMinutes: 4 * 60,
-    resolutionMinutes: 24 * 60,
-  },
-  P4: {
-    priority: 'P4',
-    responseMinutes: 8 * 60,
-    resolutionMinutes: 72 * 60,
-  },
-};
 
 export interface TicketSlaSnapshot {
   ticketId: string;
   priority: TicketPriority;
   status: TicketStatus;
   createdAt: string;
+  policyRevision: number;
   responseTargetMinutes: number;
   resolutionTargetMinutes: number;
   responseDueAt: string;
@@ -101,25 +82,20 @@ export function computeTicketSla(
     resolvedAt: Date | null;
     closedAt: Date | null;
   },
-  firstResponseAt: Date | null = null,
+  target: PersistedSlaTarget,
   now: Date = new Date(),
 ): TicketSlaSnapshot {
-  const target = SLA_POLICY_V1[ticket.priority];
   const createdAtMs = ticket.createdAt.getTime();
-  const responseDueAtMs = createdAtMs + target.responseMinutes * 60_000;
-  const resolutionDueAtMs = createdAtMs + target.resolutionMinutes * 60_000;
+  const responseDueAtMs = target.responseDueAt.getTime();
+  const resolutionDueAtMs = target.resolutionDueAt.getTime();
   const isRejected = ticket.status === 'REJECTED';
 
   const resolutionCompletedAt =
     ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
-      ? (ticket.resolvedAt ?? ticket.closedAt ?? now)
+      ? ticket.resolvedAt
       : null;
 
-  const responseCompletedAt =
-    firstResponseAt ??
-    (resolutionCompletedAt && resolutionCompletedAt.getTime() >= createdAtMs
-      ? resolutionCompletedAt
-      : null);
+  const responseCompletedAt = target.firstResponseAt;
 
   const responseStatus = evaluateMetricStatus(
     createdAtMs,
@@ -142,11 +118,12 @@ export function computeTicketSla(
     priority: ticket.priority,
     status: ticket.status,
     createdAt: ticket.createdAt.toISOString(),
-    responseTargetMinutes: target.responseMinutes,
-    resolutionTargetMinutes: target.resolutionMinutes,
+    policyRevision: target.policyRevision,
+    responseTargetMinutes: target.responseTargetMinutes,
+    resolutionTargetMinutes: target.resolutionTargetMinutes,
     responseDueAt: new Date(responseDueAtMs).toISOString(),
     resolutionDueAt: new Date(resolutionDueAtMs).toISOString(),
-    firstResponseAt: firstResponseAt ? firstResponseAt.toISOString() : null,
+    firstResponseAt: target.firstResponseAt ? target.firstResponseAt.toISOString() : null,
     resolvedAt: ticket.resolvedAt ? ticket.resolvedAt.toISOString() : null,
     responseStatus,
     resolutionStatus,

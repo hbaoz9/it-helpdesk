@@ -165,11 +165,7 @@ async function main(): Promise<void> {
     for (const slaItem of SLA_POLICIES_SEED) {
       await prisma.slaPolicy.upsert({
         where: { priority: slaItem.priority },
-        update: {
-          responseMinutes: slaItem.responseMinutes,
-          resolutionMinutes: slaItem.resolutionMinutes,
-          active: true,
-        },
+        update: {},
         create: {
           priority: slaItem.priority,
           responseMinutes: slaItem.responseMinutes,

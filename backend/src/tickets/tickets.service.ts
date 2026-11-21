@@ -5,12 +5,14 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
   Prisma,
+  type TicketSla,
   type TicketImpact,
   type TicketPriority,
   type TicketStatus,
@@ -30,6 +32,7 @@ import type {
 } from './dto/supervisor-ticket.dto.js';
 import {
   computeTicketSla,
+  type PersistedSlaTarget,
   type TicketSlaSnapshot,
 } from './ticket-sla.js';
 
@@ -56,6 +59,7 @@ export interface SupervisorDashboardSummary {
     atRisk: number;
     breached: number;
     met: number;
+    unknown: number;
   };
   workloadByTechnician: SupervisorTechnicianSummary[];
 }
@@ -276,10 +280,16 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
         data: { status: 'IN_PROGRESS', version: { increment: 1 } },
       });
       if (updated.count !== 1) throw new ConflictException('Ticket changed. Reload and try again');
+      const now = new Date();
+      await tx.ticketSla.updateMany({
+        where: { ticketId: id, firstResponseAt: null },
+        data: { firstResponseAt: now },
+      });
       await tx.ticketActivity.create({
         data: {
           ticketId: id, actorId: user.id, type: 'STATUS', visibility: 'PUBLIC',
           fromStatus: ticket.status, toStatus: 'IN_PROGRESS',
+          createdAt: now,
         },
       });
     });
@@ -361,6 +371,10 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
         },
       });
       if (updated.count !== 1) throw new ConflictException('Ticket changed. Reload and try again');
+      await tx.ticketSla.updateMany({
+        where: { ticketId: id },
+        data: { lastResolvedAt: now },
+      });
       await tx.ticketActivity.create({
         data: {
           ticketId: id, actorId: user.id, type: 'STATUS', visibility: 'PUBLIC',
@@ -594,25 +608,45 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
     const urgency = dto.urgency as TicketUrgency;
     const priority = this.calculatePriority(impact, urgency);
 
-    return this.prisma.ticket.create({
-      data: {
-        code: `INC-${new Date().getFullYear()}-${randomUUID()
-          .slice(0, 8)
-          .toUpperCase()}`,
-        type: 'INCIDENT',
-        title: dto.title,
-        description: dto.description,
-        categoryId: category.id,
-        impact,
-        urgency,
-        priority,
-        requesterId: user.id,
-      },
-      include: {
-        category: true,
-        requester: { select: { id: true, fullName: true, email: true } },
-        assignee: { select: { id: true, fullName: true } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const policy = await tx.slaPolicy.findUnique({ where: { priority } });
+      if (
+        !policy?.active ||
+        policy.responseMinutes <= 0 ||
+        policy.resolutionMinutes <= 0
+      ) {
+        throw new ServiceUnavailableException(`No active SLA policy for ${priority}`);
+      }
+      const now = new Date();
+      return tx.ticket.create({
+        data: {
+          code: `INC-${now.getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
+          type: 'INCIDENT',
+          title: dto.title,
+          description: dto.description,
+          categoryId: category.id,
+          impact,
+          urgency,
+          priority,
+          requesterId: user.id,
+          createdAt: now,
+          ticketSla: {
+            create: {
+              slaPolicyId: policy.id,
+              policyRevision: policy.revision,
+              responseTargetMinutes: policy.responseMinutes,
+              resolutionTargetMinutes: policy.resolutionMinutes,
+              responseDueAt: new Date(now.getTime() + policy.responseMinutes * 60_000),
+              resolutionDueAt: new Date(now.getTime() + policy.resolutionMinutes * 60_000),
+            },
+          },
+        },
+        include: {
+          category: true,
+          requester: { select: { id: true, fullName: true, email: true } },
+          assignee: { select: { id: true, fullName: true } },
+        },
+      });
     });
   }
 
@@ -994,28 +1028,19 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
       where: { id, AND: [this.accessScope(user)] },
       select: {
         id: true,
-        requesterId: true,
         priority: true,
         status: true,
         createdAt: true,
         resolvedAt: true,
         closedAt: true,
-        activities: {
-          where: { type: 'COMMENT', visibility: 'PUBLIC' },
-          select: { actorId: true, createdAt: true },
-          orderBy: { createdAt: 'asc' },
-        },
+        ticketSla: true,
       },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
 
-    const firstItComment = ticket.activities.find(
-      (act) => act.actorId !== null && act.actorId !== ticket.requesterId,
-    );
-
     return computeTicketSla(
       ticket,
-      firstItComment ? firstItComment.createdAt : null,
+      this.requireSlaSnapshot(ticket.ticketSla),
       now,
     );
   }
@@ -1029,18 +1054,13 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
       this.prisma.ticket.findMany({
         select: {
           id: true,
-          requesterId: true,
           assigneeId: true,
           priority: true,
           status: true,
           createdAt: true,
           resolvedAt: true,
           closedAt: true,
-          activities: {
-            where: { type: 'COMMENT', visibility: 'PUBLIC' },
-            select: { actorId: true, createdAt: true },
-            orderBy: { createdAt: 'asc' },
-          },
+          ticketSla: true,
         },
       }),
       this.listTechnicians(user),
@@ -1069,6 +1089,7 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
       atRisk: 0,
       breached: 0,
       met: 0,
+      unknown: 0,
     };
 
     let unassignedCount = 0;
@@ -1088,14 +1109,11 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
         triageQueueCount++;
       }
 
-      const firstItComment = ticket.activities.find(
-        (act) => act.actorId !== null && act.actorId !== ticket.requesterId,
-      );
-      const slaSnap = computeTicketSla(
-        ticket,
-        firstItComment ? firstItComment.createdAt : null,
-        now,
-      );
+      if (!this.hasSlaSnapshot(ticket.ticketSla)) {
+        sla.unknown++;
+        continue;
+      }
+      const slaSnap = computeTicketSla(ticket, ticket.ticketSla, now);
 
       if (slaSnap.overallStatus === 'BREACHED') sla.breached++;
       else if (slaSnap.overallStatus === 'AT_RISK') sla.atRisk++;
@@ -1119,35 +1137,22 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
    */
   async scanSlaCandidates(now = new Date()): Promise<TicketSlaSnapshot[]> {
     const openTickets = await this.prisma.ticket.findMany({
-      where: {
-        status: { in: OPEN_TICKET_STATUSES },
-      },
+      where: { status: { in: OPEN_TICKET_STATUSES } },
       select: {
         id: true,
-        requesterId: true,
         priority: true,
         status: true,
         createdAt: true,
         resolvedAt: true,
         closedAt: true,
-        activities: {
-          where: { type: 'COMMENT', visibility: 'PUBLIC' },
-          select: { actorId: true, createdAt: true },
-          orderBy: { createdAt: 'asc' },
-        },
+        ticketSla: true,
       },
     });
 
     const alerts: TicketSlaSnapshot[] = [];
     for (const ticket of openTickets) {
-      const firstItComment = ticket.activities.find(
-        (act) => act.actorId !== null && act.actorId !== ticket.requesterId,
-      );
-      const snap = computeTicketSla(
-        ticket,
-        firstItComment ? firstItComment.createdAt : null,
-        now,
-      );
+      if (!this.hasSlaSnapshot(ticket.ticketSla)) continue;
+      const snap = computeTicketSla(ticket, ticket.ticketSla, now);
       if (
         snap.overallStatus === 'AT_RISK' ||
         snap.overallStatus === 'BREACHED'
@@ -1218,5 +1223,16 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
     if (!user.roles.includes('TECHNICIAN')) {
       throw new ForbiddenException('Technician scope requires TECHNICIAN role');
     }
+  }
+
+  private hasSlaSnapshot(sla: TicketSla | null): sla is TicketSla & PersistedSlaTarget {
+    return sla?.responseTargetMinutes != null && sla.resolutionTargetMinutes != null;
+  }
+
+  private requireSlaSnapshot(sla: TicketSla | null): PersistedSlaTarget {
+    if (!this.hasSlaSnapshot(sla)) {
+      throw new ServiceUnavailableException('SLA snapshot unavailable for legacy ticket');
+    }
+    return sla;
   }
 }

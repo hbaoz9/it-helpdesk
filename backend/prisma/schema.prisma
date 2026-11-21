@@ -215,6 +215,8 @@ model TicketSla {
   ticketId             String     @unique @map("ticket_id") @db.Uuid
   slaPolicyId          String?    @map("sla_policy_id") @db.Uuid
   policyRevision       Int        @default(1) @map("policy_revision")
+  responseTargetMinutes Int?       @map("response_target_minutes")
+  resolutionTargetMinutes Int?     @map("resolution_target_minutes")
   responseDueAt        DateTime   @map("response_due_at")
   resolutionDueAt      DateTime   @map("resolution_due_at")
   firstResponseAt      DateTime?  @map("first_response_at")

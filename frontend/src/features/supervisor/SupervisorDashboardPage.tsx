@@ -396,6 +396,7 @@ const SupervisorDashboardPage = () => {
                     </Tag>
                     <Tag color="error">Quá hạn: {dashboard.sla.breached}</Tag>
                     <Tag color="success">Đạt: {dashboard.sla.met}</Tag>
+                    {dashboard.sla.unknown > 0 && <Tag>Chưa có SLA: {dashboard.sla.unknown}</Tag>}
                   </Descriptions.Item>
                 </Descriptions>
               </div>

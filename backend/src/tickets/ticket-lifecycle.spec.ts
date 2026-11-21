@@ -70,6 +70,7 @@ describe('Requester Ticket lifecycle', () => {
       });
       const tx = {
         ticket: { findFirst: findAssigned, updateMany },
+        ticketSla: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
         ticketActivity: { create: createActivity },
       };
       const fullTicket = vi.fn(async () => ({ ...record }));
@@ -99,6 +100,12 @@ describe('Requester Ticket lifecycle', () => {
       expect(activities.map((item) => item.visibility)).toEqual([
         'PUBLIC', 'PUBLIC', 'INTERNAL', 'PUBLIC', 'PUBLIC', 'PUBLIC', 'PUBLIC',
       ]);
+      expect(tx.ticketSla.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { ticketId: record.id, firstResponseAt: null },
+      }));
+      expect(tx.ticketSla.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { ticketId: record.id }, data: { lastResolvedAt: record.resolvedAt },
+      }));
       expect(activities.at(-1)).toMatchObject({
         fromStatus: 'IN_PROGRESS', toStatus: 'RESOLVED',
         content: 'Đã cài lại VPN và xác nhận kết nối',

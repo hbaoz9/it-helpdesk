@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { CategoriesService } from '../categories/categories.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -454,9 +455,53 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
   });
 
   describe('SLA Calculation & Dashboard V1 Aggregation', () => {
+    it('uses the persisted policy snapshot even after the active policy changes', async () => {
+      const ticketStore = {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'ticket-1', priority: 'P1', status: 'IN_PROGRESS',
+          createdAt: new Date('2026-11-20T08:00:00.000Z'),
+          resolvedAt: null, closedAt: null,
+          ticketSla: {
+            policyRevision: 2, responseTargetMinutes: 30, resolutionTargetMinutes: 240,
+            responseDueAt: new Date('2026-11-20T08:30:00.000Z'),
+            resolutionDueAt: new Date('2026-11-20T12:00:00.000Z'),
+            firstResponseAt: new Date('2026-11-20T08:20:00.000Z'),
+          },
+        }),
+      };
+      const service = serviceWith({ ticket: ticketStore });
+      const snapshot = await service.getTicketSla(requester, 'ticket-1', new Date('2026-11-20T09:00:00.000Z'));
+
+      expect(snapshot.responseStatus).toBe('MET');
+      expect(snapshot.policyRevision).toBe(2);
+      expect(snapshot.responseDueAt).toBe('2026-11-20T08:30:00.000Z');
+      expect(ticketStore.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'ticket-1', AND: [{ requesterId: requester.id }] },
+        select: expect.objectContaining({ ticketSla: true }),
+      }));
+      await expect(service.getTicketSla(adminOnly, 'ticket-1')).rejects.toThrow(ForbiddenException);
+      expect(ticketStore.findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails explicitly when a legacy Ticket has no reviewed SLA snapshot', async () => {
+      const service = serviceWith({
+        ticket: { findFirst: vi.fn().mockResolvedValue({
+          id: 'ticket-1', priority: 'P1', status: 'NEW',
+          createdAt: new Date('2026-11-20T08:00:00.000Z'),
+          resolvedAt: null, closedAt: null, ticketSla: null,
+        }) },
+      });
+      await expect(service.getTicketSla(requester, 'ticket-1')).rejects.toThrow(ServiceUnavailableException);
+    });
+
     it('evaluates ON_TRACK, AT_RISK (80%), BREACHED (100%), and MET SLA states accurately', () => {
       const createdAt = new Date('2026-11-20T08:00:00.000Z');
-      // P1: Response 15m (due 08:15, warning at 08:12), Resolution 4h (due 12:00)
+      const snapshot = {
+        policyRevision: 1, responseTargetMinutes: 15, resolutionTargetMinutes: 240,
+        responseDueAt: new Date('2026-11-20T08:15:00.000Z'),
+        resolutionDueAt: new Date('2026-11-20T12:00:00.000Z'),
+        firstResponseAt: null as Date | null,
+      };
       const ticket = {
         id: 't-p1',
         priority: 'P1' as const,
@@ -467,24 +512,33 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
       };
 
       expect(
-        computeTicketSla(ticket, null, new Date('2026-11-20T08:10:00.000Z'))
+        computeTicketSla(ticket, snapshot, new Date('2026-11-20T08:10:00.000Z'))
           .responseStatus,
       ).toBe('ON_TRACK');
       expect(
-        computeTicketSla(ticket, null, new Date('2026-11-20T08:12:00.000Z'))
+        computeTicketSla(ticket, snapshot, new Date('2026-11-20T08:12:00.000Z'))
           .responseStatus,
       ).toBe('AT_RISK');
       expect(
-        computeTicketSla(ticket, null, new Date('2026-11-20T08:16:00.000Z'))
+        computeTicketSla(ticket, snapshot, new Date('2026-11-20T08:16:00.000Z'))
           .responseStatus,
       ).toBe('BREACHED');
       expect(
         computeTicketSla(
           ticket,
-          new Date('2026-11-20T08:05:00.000Z'),
+          { ...snapshot, firstResponseAt: new Date('2026-11-20T08:05:00.000Z') },
           new Date('2026-11-20T09:00:00.000Z'),
         ).responseStatus,
       ).toBe('MET');
+
+      const resolved = {
+        ...ticket,
+        status: 'RESOLVED' as const,
+        resolvedAt: new Date('2026-11-20T09:00:00.000Z'),
+      };
+      expect(computeTicketSla(resolved, snapshot, new Date('2026-11-21T08:00:00.000Z')).resolutionStatus).toBe('MET');
+      expect(computeTicketSla(ticket, { ...snapshot, responseTargetMinutes: 30, responseDueAt: new Date('2026-11-20T08:30:00.000Z') }, new Date('2026-11-20T08:16:00.000Z')).responseStatus).toBe('ON_TRACK');
+      expect(computeTicketSla({ ...resolved, status: 'ASSIGNED', resolvedAt: null }, snapshot, new Date('2026-11-20T12:01:00.000Z')).resolutionStatus).toBe('BREACHED');
     });
 
     it('aggregates real ticket counts, SLA status, and technician workload for Dashboard V1', async () => {
@@ -502,7 +556,12 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
               createdAt,
               resolvedAt: null,
               closedAt: null,
-              activities: [],
+              ticketSla: {
+                policyRevision: 1, responseTargetMinutes: 15, resolutionTargetMinutes: 240,
+                responseDueAt: new Date('2026-11-20T08:15:00.000Z'),
+                resolutionDueAt: new Date('2026-11-20T12:00:00.000Z'),
+                firstResponseAt: null,
+              },
             },
             {
               id: 't2',
@@ -513,12 +572,16 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
               createdAt,
               resolvedAt: null,
               closedAt: null,
-              activities: [
-                {
-                  actorId: technician.id,
-                  createdAt: new Date('2026-11-20T08:10:00.000Z'),
-                },
-              ],
+              ticketSla: {
+                policyRevision: 1, responseTargetMinutes: 240, resolutionTargetMinutes: 1440,
+                responseDueAt: new Date('2026-11-20T12:00:00.000Z'),
+                resolutionDueAt: new Date('2026-11-21T08:00:00.000Z'),
+                firstResponseAt: new Date('2026-11-20T08:10:00.000Z'),
+              },
+            },
+            {
+              id: 'legacy', assigneeId: null, priority: 'P4', status: 'CLOSED',
+              createdAt, resolvedAt: null, closedAt: now, ticketSla: null,
             },
           ]),
         },
@@ -535,7 +598,7 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
       });
 
       const dashboard = await service.getSupervisorDashboard(supervisor, now);
-      expect(dashboard.totalTickets).toBe(2);
+      expect(dashboard.totalTickets).toBe(3);
       expect(dashboard.unassignedCount).toBe(1);
       expect(dashboard.triageQueueCount).toBe(1);
       expect(dashboard.byStatus.NEW).toBe(1);
@@ -544,6 +607,7 @@ describe('Supervisor Ticket Workflow, Dashboard & SLA Foundation', () => {
       expect(dashboard.byPriority.P3).toBe(1);
       expect(dashboard.sla.breached).toBe(1);
       expect(dashboard.sla.onTrack).toBe(1);
+      expect(dashboard.sla.unknown).toBe(1);
       expect(dashboard.workloadByTechnician).toEqual([
         expect.objectContaining({
           id: technician.id,

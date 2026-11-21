@@ -92,6 +92,7 @@ export interface TicketSlaSnapshot {
   priority: TicketPriority;
   status: TicketStatus;
   createdAt: string;
+  policyRevision: number;
   responseTargetMinutes: number;
   resolutionTargetMinutes: number;
   responseDueAt: string;
@@ -126,6 +127,7 @@ export interface SupervisorDashboardSummary {
     atRisk: number;
     breached: number;
     met: number;
+    unknown: number;
   };
   workloadByTechnician: SupervisorTechnicianSummary[];
 }
