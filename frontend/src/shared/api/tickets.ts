@@ -2,8 +2,12 @@ import { apiRequest } from './client';
 import type {
   Category,
   ImpactLevel,
-  TicketRecord,
+  SupervisorDashboardSummary,
+  SupervisorTechnicianSummary,
   TicketActivity,
+  TicketPriority,
+  TicketRecord,
+  TicketSlaSnapshot,
   TicketStatus,
   UrgencyLevel,
 } from './types';
@@ -18,11 +22,33 @@ export interface CreateTicketInput {
 
 export interface TicketFilters {
   scope?: 'requested';
+  categoryId?: string;
   status?: TicketStatus;
   priority?: TicketRecord['priority'];
   search?: string;
   page?: number;
   limit?: number;
+}
+
+export interface TriageTicketInput {
+  version: number;
+  categoryId?: string;
+  impact?: ImpactLevel;
+  urgency?: UrgencyLevel;
+  priority?: TicketPriority;
+  reason?: string;
+}
+
+export interface AssignTicketInput {
+  version: number;
+  assigneeId: string;
+  reason?: string;
+}
+
+export interface OverridePriorityInput {
+  version: number;
+  priority: TicketPriority;
+  reason: string;
 }
 
 export function getCategories(): Promise<Category[]> {
@@ -81,5 +107,51 @@ export function closeRequesterTicket(id: string, version: number): Promise<Ticke
 export function reopenRequesterTicket(id: string, version: number, reason: string): Promise<TicketRecord> {
   return apiRequest(`/tickets/${encodeURIComponent(id)}/reopen`, {
     method: 'POST', body: JSON.stringify({ version, reason }),
+  });
+}
+
+/* Supervisor Workflow, Dashboard & SLA APIs */
+
+export function getSupervisorDashboard(): Promise<SupervisorDashboardSummary> {
+  return apiRequest('/tickets/supervisor/dashboard');
+}
+
+export function getSupervisorTechnicians(): Promise<SupervisorTechnicianSummary[]> {
+  return apiRequest('/tickets/supervisor/technicians');
+}
+
+export function getTicketSla(id: string): Promise<TicketSlaSnapshot> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/sla`);
+}
+
+export function getSupervisorTicketEvents(id: string): Promise<TicketActivity[]> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/events`);
+}
+
+export function triageTicket(id: string, input: TriageTicketInput): Promise<TicketRecord> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/triage`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function assignTicket(id: string, input: AssignTicketInput): Promise<TicketRecord> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/assign`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function rejectTicket(id: string, version: number, reason: string): Promise<TicketRecord> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ version, reason }),
+  });
+}
+
+export function overrideTicketPriority(id: string, input: OverridePriorityInput): Promise<TicketRecord> {
+  return apiRequest(`/tickets/${encodeURIComponent(id)}/override-priority`, {
+    method: 'POST',
+    body: JSON.stringify(input),
   });
 }
