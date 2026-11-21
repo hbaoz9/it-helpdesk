@@ -55,3 +55,33 @@ export interface TicketActivity {
   createdAt: string;
   actor: { id: string; fullName: string } | null;
 }
+
+export interface AdminUserRecord {
+  id: string;
+  email: string;
+  fullName: string;
+  active: boolean;
+  roles: RoleCode[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminCategoryRecord {
+  id: string;
+  name: string;
+  active: boolean;
+  ticketCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminSlaPolicyRecord {
+  id: string;
+  priority: TicketPriority;
+  responseMinutes: number;
+  resolutionMinutes: number;
+  revision: number;
+  active: boolean;
+  updatedAt: string;
+}
+
