@@ -176,8 +176,46 @@ async function main(): Promise<void> {
       });
     }
 
+    await prisma.rustdeskServerConfig.upsert({
+      where: { singletonKey: 'PRIMARY' },
+      update: {},
+      create: {
+        singletonKey: 'PRIMARY',
+        idServerHost: '127.0.0.1:21116',
+        relayServerHost: '127.0.0.1:21117',
+        publicKey: null,
+        approvalTtlMinutes: 15,
+        clientGuideUrl: 'https://rustdesk.com/docs/en/client/',
+        enabled: true,
+      },
+    });
+
+    const requesterUser = await prisma.user.findUnique({
+      where: { email: 'requester@helpdesk.local' },
+    });
+    if (requesterUser) {
+      await prisma.userDevice.upsert({
+        where: { rustdeskId: '102938475' },
+        update: {
+          ownerId: requesterUser.id,
+          label: 'Laptop Requester Demo (Windows 11)',
+          osName: 'Windows 11 Pro',
+          verificationStatus: 'VERIFIED',
+          active: true,
+        },
+        create: {
+          ownerId: requesterUser.id,
+          label: 'Laptop Requester Demo (Windows 11)',
+          rustdeskId: '102938475',
+          osName: 'Windows 11 Pro',
+          verificationStatus: 'VERIFIED',
+          active: true,
+        },
+      });
+    }
+
     console.log(
-      'Seed completed successfully: 4 roles, 4 categories, 4 SLA policies, and 4 local test accounts (Argon2id).',
+      'Seed completed successfully: 4 roles, 4 categories, 4 SLA policies, RustDesk config, demo device, and 4 local test accounts (Argon2id).',
     );
   } finally {
     await prisma.$disconnect();

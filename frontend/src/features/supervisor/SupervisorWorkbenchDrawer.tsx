@@ -42,6 +42,7 @@ import type {
 import { ApiError } from '../../shared/api/client';
 import TicketPriorityTag from '../../shared/components/tickets/TicketPriorityTag';
 import TicketStatusTag from '../../shared/components/tickets/TicketStatusTag';
+import TicketRemoteSupportPanel from '../remote-support/TicketRemoteSupportPanel';
 
 const IMPACT_OPTIONS: { value: ImpactLevel; label: string }[] = [
   { value: 'LOW', label: 'LOW – Cá nhân (Thấp)' },
@@ -361,6 +362,14 @@ export default function SupervisorWorkbenchDrawer({
           {!sla && (
             <Alert type="info" showIcon message="Ticket cũ chưa có SLA snapshot; chưa thể xác định deadline lịch sử." />
           )}
+
+          {/* Giám sát phiên Hỗ trợ từ xa RustDesk */}
+          <TicketRemoteSupportPanel
+            ticketId={ticket.id}
+            ticketStatus={ticket.status}
+            mode="supervisor"
+            onActivityLogged={() => setRefreshTick((v) => v + 1)}
+          />
 
           {/* Bước 1: Phân loại Ticket (Triage: NEW -> TRIAGED) */}
           {canTriage && (

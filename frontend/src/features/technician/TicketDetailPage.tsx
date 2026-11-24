@@ -14,6 +14,7 @@ import {
 import type { TicketActivity, TicketRecord } from '../../shared/api/types';
 import { STATUS_METADATA } from '../../shared/components/tickets/ticketMetadata';
 import { INTERNAL_PATHS } from '../../layouts/internalPaths';
+import TicketRemoteSupportPanel from '../remote-support/TicketRemoteSupportPanel';
 import './TechnicianWorkspace.css';
 
 function formatDate(value: string) {
@@ -148,6 +149,15 @@ export default function TicketDetailPage() {
               />
             )}
           </section>
+
+          <div style={{ marginBottom: 16 }}>
+            <TicketRemoteSupportPanel
+              ticketId={ticket.id}
+              ticketStatus={ticket.status}
+              mode="technician"
+              onActivityLogged={() => setRevision((value) => value + 1)}
+            />
+          </div>
 
           {canWork && (
             <section className="tech-card" style={{ padding: 18 }}>

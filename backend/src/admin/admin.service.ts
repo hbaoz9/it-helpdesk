@@ -9,16 +9,21 @@ import { AuthService } from '../auth/auth.service.js';
 import { SessionService } from '../auth/session.service.js';
 import {
   Prisma,
+  type DeviceVerificationStatus,
   type TicketPriority,
 } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type {
+  AdminAuditLogsQueryDto,
   AdminCategoriesQueryDto,
+  AdminDevicesQueryDto,
   AdminUsersQueryDto,
   CreateAdminCategoryDto,
   CreateAdminUserDto,
   UpdateAdminCategoryDto,
+  UpdateAdminDeviceDto,
   UpdateAdminUserDto,
+  UpdateRustdeskConfigDto,
   UpdateSlaPolicyDto,
 } from './dto/admin.dto.js';
 
@@ -49,6 +54,49 @@ export interface AdminSlaPolicyRecord {
   revision: number;
   active: boolean;
   updatedAt: Date;
+}
+
+export interface AdminDeviceRecord {
+  id: string;
+  label: string;
+  rustdeskId: string;
+  osName: string | null;
+  verificationStatus: DeviceVerificationStatus;
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  owner: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+  sessionCount: number;
+}
+
+export interface AdminRustdeskConfigRecord {
+  id: string;
+  singletonKey: string;
+  idServerHost: string;
+  relayServerHost: string;
+  publicKey: string | null;
+  approvalTtlMinutes: number;
+  clientGuideUrl: string | null;
+  enabled: boolean;
+  updatedById: string | null;
+  updatedAt: Date;
+}
+
+export interface AdminAuditLogRecord {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  reason: string | null;
+  beforeJson: string | null;
+  afterJson: string | null;
+  createdAt: Date;
+  actor: { id: string; fullName: string; email: string } | null;
+  ticket: { id: string; code: string; title: string } | null;
 }
 
 const ROLE_DISPLAY_NAMES: Record<RoleCode, string> = {
@@ -533,6 +581,219 @@ export class AdminService {
       });
 
       return updated;
+    });
+  }
+
+  async listDevices(query: AdminDevicesQueryDto): Promise<AdminDeviceRecord[]> {
+    const where: Prisma.UserDeviceWhereInput = {};
+
+    if (query.active !== undefined) {
+      where.active = query.active;
+    }
+
+    if (query.verificationStatus !== undefined) {
+      where.verificationStatus = query.verificationStatus;
+    }
+
+    if (query.search) {
+      where.OR = [
+        { label: { contains: query.search, mode: 'insensitive' } },
+        { rustdeskId: { contains: query.search, mode: 'insensitive' } },
+        {
+          owner: {
+            OR: [
+              { fullName: { contains: query.search, mode: 'insensitive' } },
+              { email: { contains: query.search, mode: 'insensitive' } },
+            ],
+          },
+        },
+      ];
+    }
+
+    const devices = await this.prisma.userDevice.findMany({
+      where,
+      include: {
+        owner: { select: { id: true, fullName: true, email: true } },
+        _count: { select: { remoteSessions: true } },
+      },
+      orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    return devices.map((d) => ({
+      id: d.id,
+      label: d.label,
+      rustdeskId: d.rustdeskId,
+      osName: d.osName,
+      verificationStatus: d.verificationStatus,
+      active: d.active,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
+      owner: d.owner,
+      sessionCount: d._count?.remoteSessions ?? 0,
+    }));
+  }
+
+  async updateDevice(
+    actor: AuthenticatedUser,
+    deviceId: string,
+    dto: UpdateAdminDeviceDto,
+  ): Promise<AdminDeviceRecord> {
+    const existing = await this.prisma.userDevice.findUnique({
+      where: { id: deviceId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Registered device not found');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const device = await tx.userDevice.update({
+        where: { id: deviceId },
+        data: {
+          ...(dto.label !== undefined ? { label: dto.label } : {}),
+          ...(dto.active !== undefined ? { active: dto.active } : {}),
+          ...(dto.verificationStatus !== undefined
+            ? { verificationStatus: dto.verificationStatus }
+            : {}),
+        },
+        include: {
+          owner: { select: { id: true, fullName: true, email: true } },
+          _count: { select: { remoteSessions: true } },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'ADMIN_DEVICE_UPDATED',
+          entityType: 'USER_DEVICE',
+          entityId: device.id,
+          reason: dto.reason,
+          beforeJson: JSON.stringify({
+            label: existing.label,
+            active: existing.active,
+            verificationStatus: existing.verificationStatus,
+          }),
+          afterJson: JSON.stringify({
+            label: device.label,
+            active: device.active,
+            verificationStatus: device.verificationStatus,
+          }),
+        },
+      });
+
+      return device;
+    });
+
+    return {
+      id: updated.id,
+      label: updated.label,
+      rustdeskId: updated.rustdeskId,
+      osName: updated.osName,
+      verificationStatus: updated.verificationStatus,
+      active: updated.active,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+      owner: updated.owner,
+      sessionCount: updated._count?.remoteSessions ?? 0,
+    };
+  }
+
+  async getRustdeskConfig(): Promise<AdminRustdeskConfigRecord> {
+    const existing = await this.prisma.rustdeskServerConfig.findUnique({
+      where: { singletonKey: 'PRIMARY' },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    return this.prisma.rustdeskServerConfig.create({
+      data: {
+        singletonKey: 'PRIMARY',
+        idServerHost: '127.0.0.1:21116',
+        relayServerHost: '127.0.0.1:21117',
+        publicKey: null,
+        approvalTtlMinutes: 15,
+        clientGuideUrl: 'https://rustdesk.com/docs/en/client/',
+        enabled: true,
+      },
+    });
+  }
+
+  async updateRustdeskConfig(
+    actor: AuthenticatedUser,
+    dto: UpdateRustdeskConfigDto,
+  ): Promise<AdminRustdeskConfigRecord> {
+    const existing = await this.getRustdeskConfig();
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.rustdeskServerConfig.update({
+        where: { singletonKey: 'PRIMARY' },
+        data: {
+          idServerHost: dto.idServerHost,
+          ...(dto.relayServerHost !== undefined
+            ? { relayServerHost: dto.relayServerHost ?? dto.idServerHost }
+            : {}),
+          ...(dto.publicKey !== undefined ? { publicKey: dto.publicKey } : {}),
+          approvalTtlMinutes: dto.approvalTtlMinutes,
+          ...(dto.clientGuideUrl !== undefined
+            ? { clientGuideUrl: dto.clientGuideUrl }
+            : {}),
+          enabled: dto.enabled,
+          updatedById: actor.id,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'RUSTDESK_CONFIG_UPDATED',
+          entityType: 'RUSTDESK_SERVER_CONFIG',
+          entityId: updated.id,
+          reason: dto.reason,
+          beforeJson: JSON.stringify({
+            idServerHost: existing.idServerHost,
+            relayServerHost: existing.relayServerHost,
+            publicKey: existing.publicKey,
+            approvalTtlMinutes: existing.approvalTtlMinutes,
+            clientGuideUrl: existing.clientGuideUrl,
+            enabled: existing.enabled,
+          }),
+          afterJson: JSON.stringify({
+            idServerHost: updated.idServerHost,
+            relayServerHost: updated.relayServerHost,
+            publicKey: updated.publicKey,
+            approvalTtlMinutes: updated.approvalTtlMinutes,
+            clientGuideUrl: updated.clientGuideUrl,
+            enabled: updated.enabled,
+          }),
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  async listAuditLogs(
+    query: AdminAuditLogsQueryDto,
+  ): Promise<AdminAuditLogRecord[]> {
+    const where: Prisma.AuditLogWhereInput = {};
+    if (query.entityType) {
+      where.entityType = query.entityType;
+    }
+    if (query.action) {
+      where.action = query.action;
+    }
+
+    return this.prisma.auditLog.findMany({
+      where,
+      include: {
+        actor: { select: { id: true, fullName: true, email: true } },
+        ticket: { select: { id: true, code: true, title: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: query.limit,
     });
   }
 

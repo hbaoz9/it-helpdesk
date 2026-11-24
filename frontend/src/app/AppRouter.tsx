@@ -52,6 +52,8 @@ export default function AppRouter() {
       <Route path="users" element={<AdminHomePage />} />
       <Route path="categories" element={<AdminHomePage />} />
       <Route path="sla" element={<AdminHomePage />} />
+      <Route path="rustdesk" element={<AdminHomePage />} />
+      <Route path="audit" element={<AdminHomePage />} />
     </Route>
     <Route path="*" element={<EntryRoute />} />
   </Routes></BrowserRouter>;

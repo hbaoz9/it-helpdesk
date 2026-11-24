@@ -7,6 +7,7 @@ import { AiModule } from './ai/ai.module.js';
 import { CategoriesModule } from './categories/categories.module.js';
 import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { RemoteSupportModule } from './remote-support/remote-support.module.js';
 import { TicketsModule } from './tickets/tickets.module.js';
 
 @Module({
@@ -18,6 +19,7 @@ import { TicketsModule } from './tickets/tickets.module.js';
     HealthModule,
     CategoriesModule,
     TicketsModule,
+    RemoteSupportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

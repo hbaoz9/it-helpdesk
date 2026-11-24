@@ -7,6 +7,7 @@ import type { TicketRecord } from '../../shared/api/types';
 import { useAuth } from '../../shared/auth/useAuth';
 import { PRIORITY_METADATA, STATUS_METADATA } from './ticketMetadata';
 import RequesterTicketJourney from './RequesterTicketJourney';
+import TicketRemoteSupportPanel from '../remote-support/TicketRemoteSupportPanel';
 
 export default function RequesterTicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -75,6 +76,12 @@ export default function RequesterTicketDetailPage() {
         </Card>
       </Col>
     </Row>
+    <TicketRemoteSupportPanel
+      ticketId={ticket.id}
+      ticketStatus={ticket.status}
+      mode="requester"
+      onActivityLogged={() => setRetry((value) => value + 1)}
+    />
     <RequesterTicketJourney ticket={ticket} onUpdated={() => setRetry((value) => value + 1)} />
   </div>;
 }

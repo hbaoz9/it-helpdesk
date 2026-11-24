@@ -28,4 +28,6 @@ export const menu = [
   { path: '/admin', label: 'Tài khoản & Vai trò', workspace: 'admin' },
   { path: '/admin/categories', label: 'Danh mục sự cố', workspace: 'admin' },
   { path: '/admin/sla', label: 'Chính sách SLA', workspace: 'admin' },
+  { path: '/admin/rustdesk', label: 'Thiết bị & RustDesk', workspace: 'admin' },
+  { path: '/admin/audit', label: 'Nhật ký Audit', workspace: 'admin' },
 ] as const satisfies ReadonlyArray<{ path: string; label: string; workspace: Workspace }>;

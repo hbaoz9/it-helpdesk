@@ -3,7 +3,9 @@ import {
   AppstoreOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  DesktopOutlined,
   EditOutlined,
+  FileSearchOutlined,
   LockOutlined,
   MailOutlined,
   PlusOutlined,
@@ -39,18 +41,27 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   createAdminCategory,
   createAdminUser,
+  getAdminAuditLogs,
   getAdminCategories,
+  getAdminDevices,
+  getAdminRustdeskConfig,
   getAdminSlaPolicies,
   getAdminUsers,
   updateAdminCategory,
+  updateAdminDevice,
+  updateAdminRustdeskConfig,
   updateAdminSlaPolicy,
   updateAdminUser,
 } from '../../shared/api/admin';
 import { ApiError } from '../../shared/api/client';
 import type {
+  AdminAuditLogRecord,
   AdminCategoryRecord,
+  AdminDeviceRecord,
+  AdminRustdeskConfigRecord,
   AdminSlaPolicyRecord,
   AdminUserRecord,
+  DeviceVerificationStatus,
   RoleCode,
   TicketPriority,
 } from '../../shared/api/types';
@@ -58,7 +69,7 @@ import { useAuth } from '../../shared/auth/useAuth';
 import '../../styles/InternalWorkspace.css';
 import './AdminWorkspace.css';
 
-type AdminSection = 'users' | 'categories' | 'sla';
+type AdminSection = 'users' | 'categories' | 'sla' | 'rustdesk' | 'audit';
 
 const ROLE_OPTIONS: ReadonlyArray<{
   value: RoleCode;
@@ -166,6 +177,8 @@ export default function AdminHomePage() {
   const activeSection: AdminSection = useMemo(() => {
     if (location.pathname.endsWith('/categories')) return 'categories';
     if (location.pathname.endsWith('/sla')) return 'sla';
+    if (location.pathname.endsWith('/rustdesk')) return 'rustdesk';
+    if (location.pathname.endsWith('/audit')) return 'audit';
     return 'users';
   }, [location.pathname]);
 
@@ -190,6 +203,17 @@ export default function AdminHomePage() {
   const [slaPolicies, setSlaPolicies] = useState<AdminSlaPolicyRecord[]>([]);
   const [slaLoading, setSlaLoading] = useState(true);
 
+  // RustDesk Devices & Server Config state
+  const [devices, setDevices] = useState<AdminDeviceRecord[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(true);
+  const [rustdeskConfig, setRustdeskConfig] =
+    useState<AdminRustdeskConfigRecord | null>(null);
+  const [rustdeskSaving, setRustdeskSaving] = useState(false);
+
+  // Audit Logs state
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLogRecord[]>([]);
+  const [auditLoading, setAuditLoading] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
 
   // Modals state
@@ -211,6 +235,15 @@ export default function AdminHomePage() {
   const [editUserForm] = Form.useForm<EditUserFormValues>();
   const [categoryForm] = Form.useForm<CategoryFormValues>();
   const [slaForm] = Form.useForm<SlaFormValues>();
+  const [rustdeskForm] = Form.useForm<{
+    idServerHost: string;
+    relayServerHost?: string;
+    publicKey?: string;
+    approvalTtlMinutes: number;
+    clientGuideUrl?: string;
+    enabled: boolean;
+    reason?: string;
+  }>();
 
   const loadUsers = useCallback(async () => {
     setUsersLoading(true);
@@ -355,11 +388,88 @@ export default function AdminHomePage() {
     };
   }, []);
 
+  const loadRustdeskData = useCallback(async () => {
+    setDevicesLoading(true);
+    try {
+      const [devList, cfg] = await Promise.all([
+        getAdminDevices(),
+        getAdminRustdeskConfig(),
+      ]);
+      setDevices(devList);
+      setRustdeskConfig(cfg);
+      rustdeskForm.setFieldsValue({
+        idServerHost: cfg.idServerHost,
+        relayServerHost: cfg.relayServerHost ?? '',
+        publicKey: cfg.publicKey ?? '',
+        approvalTtlMinutes: cfg.approvalTtlMinutes,
+        clientGuideUrl: cfg.clientGuideUrl ?? '',
+        enabled: cfg.enabled,
+        reason: '',
+      });
+    } catch {
+      /* ignore */
+    } finally {
+      setDevicesLoading(false);
+    }
+  }, [rustdeskForm]);
+
+  const loadAuditLogs = useCallback(async () => {
+    setAuditLoading(true);
+    try {
+      const logs = await getAdminAuditLogs(undefined, 80);
+      setAuditLogs(logs);
+    } catch {
+      /* ignore */
+    } finally {
+      setAuditLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      getAdminDevices(),
+      getAdminRustdeskConfig(),
+      getAdminAuditLogs(undefined, 80),
+    ])
+      .then(([devList, cfg, logs]) => {
+        if (!active) return;
+        setDevices(devList);
+        setRustdeskConfig(cfg);
+        setAuditLogs(logs);
+        rustdeskForm.setFieldsValue({
+          idServerHost: cfg.idServerHost,
+          relayServerHost: cfg.relayServerHost ?? '',
+          publicKey: cfg.publicKey ?? '',
+          approvalTtlMinutes: cfg.approvalTtlMinutes,
+          clientGuideUrl: cfg.clientGuideUrl ?? '',
+          enabled: cfg.enabled,
+          reason: '',
+        });
+      })
+      .catch(() => {
+        /* ignore */
+      })
+      .finally(() => {
+        if (active) {
+          setDevicesLoading(false);
+          setAuditLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [rustdeskForm]);
+
   const handleTabChange = (key: string) => {
     if (key === 'categories') {
       navigate('/admin/categories');
     } else if (key === 'sla') {
       navigate('/admin/sla');
+    } else if (key === 'rustdesk') {
+      navigate('/admin/rustdesk');
+    } else if (key === 'audit') {
+      navigate('/admin/audit');
     } else {
       navigate('/admin/users');
     }
@@ -1048,6 +1158,429 @@ export default function AdminHomePage() {
                     columns={slaColumns}
                     dataSource={slaPolicies}
                     pagination={false}
+                  />
+                </div>
+              ),
+            },
+            {
+              key: 'rustdesk',
+              label: (
+                <span>
+                  <DesktopOutlined /> Thiết bị &amp; RustDesk ({devices.length})
+                </span>
+              ),
+              children: (
+                <div>
+                  <div className="adm-policy-note">
+                    <DesktopOutlined
+                      style={{ color: '#2563eb', fontSize: 18, marginTop: 2 }}
+                    />
+                    <div>
+                      <strong>
+                        Quản trị Tích hợp RustDesk Server OSS (hbbs / hbbr):
+                      </strong>{' '}
+                      Chỉ lưu địa chỉ máy chủ và <strong>Public Key</strong> (
+                      <code>id_ed25519.pub</code>), tuyệt đối không lưu khóa bí
+                      mật (Private Key) hoặc mật khẩu thiết bị. Quản trị viên có
+                      thể thu hồi xác minh (<code>REVOKED</code>) hoặc vô hiệu
+                      hóa thiết bị nghi ngờ.
+                    </div>
+                  </div>
+
+                  <Row gutter={[20, 20]}>
+                    <Col xs={24} lg={10}>
+                      <div
+                        style={{
+                          padding: 16,
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 10,
+                          background: '#f8fafc',
+                        }}
+                      >
+                        <Typography.Title level={5} style={{ marginTop: 0 }}>
+                          Cấu hình RustDesk Server chính (PRIMARY)
+                        </Typography.Title>
+                        <Form
+                          form={rustdeskForm}
+                          layout="vertical"
+                          onFinish={(values) => {
+                            setRustdeskSaving(true);
+                            updateAdminRustdeskConfig({
+                              idServerHost: values.idServerHost,
+                              relayServerHost: values.relayServerHost || null,
+                              publicKey: values.publicKey || null,
+                              approvalTtlMinutes: values.approvalTtlMinutes,
+                              clientGuideUrl: values.clientGuideUrl || null,
+                              enabled: values.enabled,
+                              reason: values.reason || undefined,
+                            })
+                              .then((updated) => {
+                                setRustdeskConfig(updated);
+                                messageApi.success(
+                                  'Đã lưu cấu hình RustDesk Server và ghi Audit Log.',
+                                );
+                                void loadAuditLogs();
+                              })
+                              .catch((cause: unknown) => {
+                                messageApi.error(
+                                  cause instanceof Error
+                                    ? cause.message
+                                    : 'Không thể lưu cấu hình RustDesk.',
+                                );
+                              })
+                              .finally(() => setRustdeskSaving(false));
+                          }}
+                        >
+                          <Form.Item
+                            label="ID / Rendezvous Server (hbbs)"
+                            name="idServerHost"
+                            rules={[
+                              {
+                                required: true,
+                                message: 'Vui lòng nhập địa chỉ hbbs.',
+                              },
+                            ]}
+                          >
+                            <Input placeholder="Ví dụ: 127.0.0.1:21116" />
+                          </Form.Item>
+                          <Form.Item
+                            label="Relay Server (hbbr)"
+                            name="relayServerHost"
+                          >
+                            <Input placeholder="Ví dụ: 127.0.0.1:21117" />
+                          </Form.Item>
+                          <Form.Item
+                            label="Public Key (id_ed25519.pub — Không nhập Private Key)"
+                            name="publicKey"
+                          >
+                            <Input placeholder="Public key Base64 từ container hbbs" />
+                          </Form.Item>
+                          <Form.Item
+                            label="Thời hạn hiệu lực chấp thuận (Phút: 1–120)"
+                            name="approvalTtlMinutes"
+                            rules={[{ required: true }]}
+                          >
+                            <InputNumber
+                              min={1}
+                              max={120}
+                              style={{ width: '100%' }}
+                            />
+                          </Form.Item>
+                          <Form.Item
+                            label="URL hướng dẫn cài đặt Client"
+                            name="clientGuideUrl"
+                          >
+                            <Input placeholder="https://rustdesk.com/docs/en/client/" />
+                          </Form.Item>
+                          <Form.Item
+                            label="Trạng thái tích hợp toàn hệ thống"
+                            name="enabled"
+                            valuePropName="checked"
+                          >
+                            <Switch
+                              checkedChildren="Đang bật"
+                              unCheckedChildren="Tạm tắt"
+                            />
+                          </Form.Item>
+                          <Form.Item
+                            label="Ghi chú Audit (Tùy chọn)"
+                            name="reason"
+                          >
+                            <Input placeholder="Lý do cập nhật cấu hình..." />
+                          </Form.Item>
+                          <Button
+                            type="primary"
+                            htmlType="submit"
+                            loading={rustdeskSaving}
+                          >
+                            Lưu cấu hình RustDesk Server
+                          </Button>
+                          {rustdeskConfig && (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                fontSize: 12,
+                                color: '#64748b',
+                              }}
+                            >
+                              Cập nhật gần nhất:{' '}
+                              {formatDateTime(rustdeskConfig.updatedAt)}
+                            </div>
+                          )}
+                        </Form>
+                      </div>
+                    </Col>
+
+                    <Col xs={24} lg={14}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: 12,
+                        }}
+                      >
+                        <Typography.Title level={5} style={{ margin: 0 }}>
+                          Danh sách thiết bị đã đăng ký ({devices.length})
+                        </Typography.Title>
+                        <Button
+                          size="small"
+                          icon={<ReloadOutlined />}
+                          onClick={() => void loadRustdeskData()}
+                        >
+                          Làm mới
+                        </Button>
+                      </div>
+
+                      <Table<AdminDeviceRecord>
+                        rowKey="id"
+                        size="small"
+                        loading={devicesLoading}
+                        dataSource={devices}
+                        pagination={{ pageSize: 6, showSizeChanger: false }}
+                        columns={[
+                          {
+                            title: 'Thiết bị & RustDesk ID',
+                            key: 'device',
+                            render: (_, rec) => (
+                              <div>
+                                <strong>{rec.label}</strong>
+                                <div>
+                                  <code>ID: {rec.rustdeskId}</code>
+                                  {rec.osName && (
+                                    <span className="iw-muted">
+                                      {' '}
+                                      · {rec.osName}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ),
+                          },
+                          {
+                            title: 'Chủ sở hữu (Requester)',
+                            key: 'owner',
+                            render: (_, rec) => (
+                              <div>
+                                <div>{rec.owner.fullName}</div>
+                                <div className="adm-user-email">
+                                  {rec.owner.email}
+                                </div>
+                              </div>
+                            ),
+                          },
+                          {
+                            title: 'Xác minh & Trạng thái',
+                            key: 'status',
+                            render: (_, rec) => (
+                              <Space direction="vertical" size={4}>
+                                <Tag
+                                  color={
+                                    rec.verificationStatus === 'VERIFIED'
+                                      ? 'success'
+                                      : rec.verificationStatus === 'REVOKED'
+                                        ? 'error'
+                                        : 'warning'
+                                  }
+                                >
+                                  {rec.verificationStatus}
+                                </Tag>
+                                <Tag color={rec.active ? 'blue' : 'default'}>
+                                  {rec.active ? 'Active' : 'Inactive'} (
+                                  {rec.sessionCount} phiên)
+                                </Tag>
+                              </Space>
+                            ),
+                          },
+                          {
+                            title: 'Thao tác Admin',
+                            key: 'actions',
+                            render: (_, rec) => (
+                              <Space wrap size={4}>
+                                <Select<DeviceVerificationStatus>
+                                  size="small"
+                                  value={rec.verificationStatus}
+                                  style={{ width: 115 }}
+                                  options={[
+                                    { value: 'VERIFIED', label: 'VERIFIED' },
+                                    { value: 'PENDING', label: 'PENDING' },
+                                    { value: 'REVOKED', label: 'REVOKED' },
+                                  ]}
+                                  onChange={(nextStatus) => {
+                                    updateAdminDevice(rec.id, {
+                                      verificationStatus: nextStatus,
+                                      reason: `Admin chuyển trạng thái xác minh sang ${nextStatus}`,
+                                    })
+                                      .then(() => {
+                                        messageApi.success(
+                                          `Đã cập nhật trạng thái xác minh thiết bị ${rec.rustdeskId}`,
+                                        );
+                                        void loadRustdeskData();
+                                        void loadAuditLogs();
+                                      })
+                                      .catch((e: unknown) =>
+                                        messageApi.error(
+                                          e instanceof Error
+                                            ? e.message
+                                            : 'Lỗi cập nhật thiết bị',
+                                        ),
+                                      );
+                                  }}
+                                />
+                                <Button
+                                  size="small"
+                                  danger={rec.active}
+                                  onClick={() => {
+                                    updateAdminDevice(rec.id, {
+                                      active: !rec.active,
+                                    })
+                                      .then(() => {
+                                        messageApi.success(
+                                          'Đã cập nhật trạng thái hoạt động của thiết bị.',
+                                        );
+                                        void loadRustdeskData();
+                                        void loadAuditLogs();
+                                      })
+                                      .catch((e: unknown) =>
+                                        messageApi.error(
+                                          e instanceof Error
+                                            ? e.message
+                                            : 'Lỗi cập nhật thiết bị',
+                                        ),
+                                      );
+                                  }}
+                                >
+                                  {rec.active ? 'Khóa' : 'Mở'}
+                                </Button>
+                              </Space>
+                            ),
+                          },
+                        ]}
+                      />
+                    </Col>
+                  </Row>
+                </div>
+              ),
+            },
+            {
+              key: 'audit',
+              label: (
+                <span>
+                  <FileSearchOutlined /> Nhật ký Audit Logs ({auditLogs.length})
+                </span>
+              ),
+              children: (
+                <div>
+                  <div
+                    className="adm-toolbar"
+                    style={{ justifyContent: 'space-between' }}
+                  >
+                    <Typography.Text type="secondary">
+                      Ghi nhận bất biến toàn bộ hành động quản trị tài khoản,
+                      SLA, đăng ký thiết bị và vòng đời phiên Hỗ trợ từ xa
+                      RustDesk.
+                    </Typography.Text>
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={() => void loadAuditLogs()}
+                    >
+                      Làm mới Audit Logs
+                    </Button>
+                  </div>
+                  <Table<AdminAuditLogRecord>
+                    rowKey="id"
+                    size="small"
+                    loading={auditLoading}
+                    dataSource={auditLogs}
+                    pagination={{ pageSize: 10, showSizeChanger: false }}
+                    columns={[
+                      {
+                        title: 'Thời gian',
+                        dataIndex: 'createdAt',
+                        key: 'createdAt',
+                        width: 155,
+                        render: (val: string) => (
+                          <span className="iw-muted">
+                            {formatDateTime(val)}
+                          </span>
+                        ),
+                      },
+                      {
+                        title: 'Người thực hiện (Actor)',
+                        key: 'actor',
+                        width: 210,
+                        render: (_, rec) =>
+                          rec.actor ? (
+                            <div>
+                              <strong>{rec.actor.fullName}</strong>
+                              <div className="adm-user-email">
+                                {rec.actor.email}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="iw-muted">Hệ thống</span>
+                          ),
+                      },
+                      {
+                        title: 'Hành động (Action)',
+                        dataIndex: 'action',
+                        key: 'action',
+                        width: 220,
+                        render: (act: string) => (
+                          <Tag
+                            color={
+                              act.startsWith('REMOTE_')
+                                ? 'cyan'
+                                : act.includes('DEVICE')
+                                  ? 'blue'
+                                  : 'geekblue'
+                            }
+                          >
+                            {act}
+                          </Tag>
+                        ),
+                      },
+                      {
+                        title: 'Đối tượng',
+                        key: 'entity',
+                        width: 190,
+                        render: (_, rec) => (
+                          <div>
+                            <Tag>{rec.entityType}</Tag>
+                            {rec.ticket && (
+                              <div>
+                                <small>Ticket: {rec.ticket.code}</small>
+                              </div>
+                            )}
+                          </div>
+                        ),
+                      },
+                      {
+                        title: 'Chi tiết / Lý do',
+                        key: 'details',
+                        render: (_, rec) => (
+                          <div style={{ fontSize: 12 }}>
+                            {rec.reason && (
+                              <div>
+                                <strong>Lý do / Kết quả:</strong> {rec.reason}
+                              </div>
+                            )}
+                            {rec.afterJson && (
+                              <code
+                                style={{
+                                  display: 'block',
+                                  whiteSpace: 'pre-wrap',
+                                  wordBreak: 'break-all',
+                                  color: '#334155',
+                                }}
+                              >
+                                {rec.afterJson}
+                              </code>
+                            )}
+                          </div>
+                        ),
+                      },
+                    ]}
                   />
                 </div>
               ),
