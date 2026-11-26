@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { createTicket, getCategories } from '../../shared/api/tickets';
 import type { Category, ImpactLevel, UrgencyLevel } from '../../shared/api/types';
 import { useAuth } from '../../shared/auth/useAuth';
+import { searchAssetsForTicket } from '../../shared/api/assets';
+import type { AssetTicketSearchRecord } from '../../shared/api/types';
 
 interface FormValues {
   title: string;
@@ -11,6 +13,7 @@ interface FormValues {
   impact: ImpactLevel;
   urgency: UrgencyLevel;
   description: string;
+  assetId?: string;
 }
 
 const impactOptions = [
@@ -39,6 +42,9 @@ export default function CreateTicketPage() {
   const [loading, setLoading] = useState(true);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [assets, setAssets] = useState<AssetTicketSearchRecord[]>([]);
+  const [assetLoading, setAssetLoading] = useState(false);
+  const [assetError, setAssetError] = useState<string | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
 
   useEffect(() => {
@@ -49,6 +55,18 @@ export default function CreateTicketPage() {
     }).catch((cause: unknown) => {
       if (active) setCategoryError(cause instanceof Error ? cause.message : 'Không tải được danh mục.');
     }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setAssetLoading(true);
+    searchAssetsForTicket()
+      .then((result) => { if (active) setAssets(result); })
+      .catch((cause: unknown) => {
+        if (active) setAssetError(cause instanceof Error ? cause.message : 'Không tải được danh sách tài sản.');
+      })
+      .finally(() => { if (active) setAssetLoading(false); });
     return () => { active = false; };
   }, []);
 
@@ -88,6 +106,29 @@ export default function CreateTicketPage() {
             <Form.Item name="categoryId" label="Danh mục" rules={[{ required: true, message: 'Vui lòng chọn danh mục.' }]}>
               <Select size="large" loading={loading} disabled={loading || categories.length === 0} placeholder="Chọn danh mục" options={categories.map((item) => ({ value: item.id, label: item.name }))} />
             </Form.Item>
+            <Form.Item name="assetId" label="Tài sản liên quan (không bắt buộc)">
+              <Select
+                size="large"
+                allowClear
+                showSearch
+                loading={assetLoading}
+                onSearch={(value) => {
+                  setAssetLoading(true);
+                  setAssetError(null);
+                  searchAssetsForTicket(value)
+                    .then(setAssets)
+                    .catch((cause: unknown) => setAssetError(cause instanceof Error ? cause.message : 'Không tải được danh sách tài sản.'))
+                    .finally(() => setAssetLoading(false));
+                }}
+                filterOption={false}
+                placeholder="Tìm tài sản toàn công ty"
+                options={assets.map((item) => ({
+                  value: item.id,
+                  label: `${item.code} — ${item.name} | ${item.category.name} | ${item.location || 'Chưa có vị trí'} | ${item.status}`,
+                }))}
+              />
+            </Form.Item>
+            {assetError && <Alert showIcon type="error" title="Không tải được danh sách tài sản" description={assetError} style={{ marginBottom: 16 }} />}
             <Row gutter={16}>
               <Col xs={24} md={12}><Form.Item name="impact" label="Mức độ ảnh hưởng" rules={[{ required: true, message: 'Vui lòng chọn mức ảnh hưởng.' }]}><Select size="large" placeholder="Chọn mức ảnh hưởng" options={impactOptions} /></Form.Item></Col>
               <Col xs={24} md={12}><Form.Item name="urgency" label="Mức độ khẩn cấp" rules={[{ required: true, message: 'Vui lòng chọn mức khẩn cấp.' }]}><Select size="large" placeholder="Chọn mức khẩn cấp" options={urgencyOptions} /></Form.Item></Col>

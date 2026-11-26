@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AdminModule } from './admin/admin.module.js';
+import { AssetsModule } from './assets/assets.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -17,6 +18,7 @@ import { TicketsModule } from './tickets/tickets.module.js';
     AiModule,
     HealthModule,
     CategoriesModule,
+    AssetsModule,
     TicketsModule,
   ],
   controllers: [AppController],

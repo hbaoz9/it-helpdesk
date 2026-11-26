@@ -232,6 +232,18 @@ describe('TicketsModule', () => {
     await expect(ticketsService.findById(technician, 'ticket-id', 'assigned')).rejects.toThrow();
     expect(findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { id: 'ticket-id', assigneeId: technician.id },
+      include: expect.objectContaining({
+        asset: {
+          select: {
+            id: true,
+            assetTag: true,
+            name: true,
+            status: true,
+            location: true,
+            category: { select: { id: true, name: true } },
+          },
+        },
+      }),
     }));
   });
 
@@ -267,12 +279,15 @@ describe('TicketsModule', () => {
 
   it('keeps Requester Ticket creation and Backend priority calculation available', async () => {
     const categoryId = '10000000-0000-4000-8000-000000000001';
+    const assetId = '10000000-0000-4000-8000-000000000002';
     const create = vi.fn().mockResolvedValue({ code: 'INC-TEST' });
     const findUnique = vi.fn().mockResolvedValue({
       id: 'policy-p1', priority: 'P1', revision: 3, active: true,
       responseMinutes: 15, resolutionMinutes: 240,
     });
+
     prismaMock.category = { findFirst: vi.fn().mockResolvedValue({ id: categoryId }) } as unknown as PrismaService['category'];
+    prismaMock.asset = { findFirst: vi.fn().mockResolvedValue({ id: assetId }) } as unknown as PrismaService['asset'];
     prismaMock.$transaction = vi.fn((callback) => callback({
       ticket: { create }, slaPolicy: { findUnique },
     })) as unknown as PrismaService['$transaction'];
@@ -281,12 +296,12 @@ describe('TicketsModule', () => {
     };
     const dto = CreateTicketDto.validate({
       title: 'Cannot connect to office Wi-Fi', description: 'Office Wi-Fi has been unavailable since morning',
-      categoryId, impact: 'HIGH', urgency: 'HIGH',
+      categoryId, assetId, impact: 'HIGH', urgency: 'HIGH',
     });
     await expect(ticketsService.create(requester, dto)).resolves.toEqual({ code: 'INC-TEST' });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        requesterId: requester.id, priority: 'P1',
+        requesterId: requester.id, priority: 'P1', assetId,
         ticketSla: { create: expect.objectContaining({
           slaPolicyId: 'policy-p1', policyRevision: 3,
           responseTargetMinutes: 15, resolutionTargetMinutes: 240,
@@ -297,6 +312,40 @@ describe('TicketsModule', () => {
     const data = create.mock.calls[0][0].data;
     expect(data.ticketSla.create.responseDueAt.getTime() - data.createdAt.getTime()).toBe(15 * 60_000);
     expect(data.ticketSla.create.resolutionDueAt.getTime() - data.createdAt.getTime()).toBe(240 * 60_000);
+  });
+
+  it('rejects a Ticket asset reference when the asset is missing or soft-deleted', async () => {
+    const categoryId = '10000000-0000-4000-8000-000000000001';
+    const assetId = '10000000-0000-4000-8000-000000000002';
+    const requester = {
+      id: 'requester-id',
+      email: 'requester@example.com',
+      fullName: 'Requester',
+      roles: ['REQUESTER' as const],
+    };
+    prismaMock.category = {
+      findFirst: vi.fn().mockResolvedValue({ id: categoryId }),
+    } as unknown as PrismaService['category'];
+    const findAsset = vi.fn().mockResolvedValue(null);
+    prismaMock.asset = { findFirst: findAsset } as unknown as PrismaService['asset'];
+
+    await expect(
+      ticketsService.create(
+        requester,
+        CreateTicketDto.validate({
+          title: 'Broken laptop',
+          description: 'Laptop does not start',
+          categoryId,
+          assetId,
+          impact: 'MEDIUM',
+          urgency: 'MEDIUM',
+        }),
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(findAsset).toHaveBeenCalledWith({
+      where: { id: assetId, deletedAt: null },
+      select: { id: true },
+    });
   });
 
   it('snapshots each policy revision only for Tickets created after the change', async () => {

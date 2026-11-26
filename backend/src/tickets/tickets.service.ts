@@ -210,6 +210,16 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
         category: true,
         requester: { select: { id: true, fullName: true, email: true } },
         assignee: { select: { id: true, fullName: true } },
+        asset: {
+          select: {
+            id: true,
+            assetTag: true,
+            name: true,
+            status: true,
+            location: true,
+            category: { select: { id: true, name: true } },
+          },
+        },
       },
     });
     if (!ticket) {
@@ -604,6 +614,15 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
     if (!category) {
       throw new BadRequestException('Category is unavailable');
     }
+    if (dto.assetId) {
+      const asset = await this.prisma.asset.findFirst({
+        where: { id: dto.assetId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!asset) {
+        throw new BadRequestException('Asset is unavailable');
+      }
+    }
 
     const impact = dto.impact as TicketImpact;
     const urgency = dto.urgency as TicketUrgency;
@@ -626,6 +645,7 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
           title: dto.title,
           description: dto.description,
           categoryId: category.id,
+          assetId: dto.assetId,
           impact,
           urgency,
           priority,
