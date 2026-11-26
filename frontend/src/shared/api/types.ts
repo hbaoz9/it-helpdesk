@@ -269,3 +269,44 @@ export interface AdminAuditLogRecord {
   actor: { id: string; fullName: string; email: string } | null;
   ticket: { id: string; code: string; title: string } | null;
 }
+
+export type RemoteInputKind =
+  | 'LASER'
+  | 'MOVE'
+  | 'LEFT_CLICK'
+  | 'RIGHT_CLICK'
+  | 'DOUBLE_CLICK'
+  | 'KEY'
+  | 'TEXT';
+
+export interface RemoteInputEventRecord {
+  id: string;
+  kind: RemoteInputKind;
+  xRatio?: number;
+  yRatio?: number;
+  key?: string;
+  text?: string;
+  actorName: string;
+  executedOnOs: boolean;
+  createdAt: number;
+}
+
+export interface LiveSessionStateRecord {
+  sessionId: string;
+  streaming: boolean;
+  remoteControlEnabled: boolean;
+  executeOnHostOs: boolean;
+  frameDataUrl: string | null;
+  frameWidth: number;
+  frameHeight: number;
+  frameUpdatedAt: number | null;
+  laserPointer: {
+    xRatio: number;
+    yRatio: number;
+    kind: RemoteInputKind;
+    actorName: string;
+    updatedAt: number;
+  } | null;
+  recentInputs: RemoteInputEventRecord[];
+  pendingInputs: RemoteInputEventRecord[];
+}

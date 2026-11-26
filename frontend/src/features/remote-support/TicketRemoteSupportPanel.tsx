@@ -46,6 +46,7 @@ import type {
   TicketRemoteSupportContext,
   TicketStatus,
 } from '../../shared/api/types';
+import WebLiveRemoteConsole from './WebLiveRemoteConsole';
 
 const SESSION_STATUS_META: Record<
   RemoteSessionStatus,
@@ -297,6 +298,16 @@ export default function TicketRemoteSupportPanel({
                 </Descriptions.Item>
               )}
             </Descriptions>
+
+            {/* KHUNG MÀN HÌNH LIVE TRỰC TIẾP TRÊN WEB & ĐIỀU KHIỂN CHUỘT/PHÍM (KHÔNG CẦN APP RUSTDESK) */}
+            {(activeSession.status === 'APPROVED' ||
+              activeSession.status === 'IN_PROGRESS') && (
+              <WebLiveRemoteConsole
+                sessionId={activeSession.id}
+                mode={mode}
+                deviceLabel={activeSession.deviceLabel}
+              />
+            )}
 
             {/* REQUESTER: CHẤP THUẬN / TỪ CHỐI / NGẮT KẾT NỐI */}
             {mode === 'requester' && activeSession.status === 'REQUESTED' && (

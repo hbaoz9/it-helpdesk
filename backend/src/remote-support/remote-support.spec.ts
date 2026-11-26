@@ -9,8 +9,11 @@ import {
   CancelRemoteSessionDto,
   CompleteRemoteSessionDto,
   CreateDeviceDto,
+  PushLiveFrameDto,
   RejectRemoteSessionDto,
   RequestRemoteSessionDto,
+  SendRemoteInputDto,
+  UpdateLiveControlSettingsDto,
 } from './dto/remote-support.dto.js';
 import { RemoteSupportService } from './remote-support.service.js';
 
@@ -643,5 +646,83 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
       }),
     );
     expect(cancelled.status).toBe('CANCELLED');
+  });
+
+  it('9. In-Browser Live Screen & Web Remote Control: enforces Layer-2 consent before allowing mouse/keyboard commands', async () => {
+    mockPrisma.remoteSupportSession.findUnique.mockResolvedValue({
+      id: SESSION_ID,
+      ticketId: TICKET_ID,
+      requesterId: REQUESTER_A.id,
+      technicianId: TECH_ASSIGNED.id,
+      status: 'IN_PROGRESS',
+      approvalExpiresAt: new Date(Date.now() + 600_000),
+    });
+
+    // Requester pushes a live screen frame from browser getDisplayMedia
+    const frameRes = await service.pushLiveFrame(
+      REQUESTER_A,
+      SESSION_ID,
+      PushLiveFrameDto.validate({
+        frameDataUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+        width: 1280,
+        height: 720,
+      }),
+    );
+    expect(frameRes.ok).toBe(true);
+
+    // Technician can use Red Laser Pointer immediately while streaming
+    const laserRes = await service.sendRemoteInput(
+      TECH_ASSIGNED,
+      SESSION_ID,
+      SendRemoteInputDto.validate({
+        kind: 'LASER',
+        xRatio: 0.45,
+        yRatio: 0.6,
+      }),
+    );
+    expect(laserRes.event.kind).toBe('LASER');
+
+    // Technician CANNOT send LEFT_CLICK before Requester toggles remoteControlEnabled = true
+    await expect(
+      service.sendRemoteInput(
+        TECH_ASSIGNED,
+        SESSION_ID,
+        SendRemoteInputDto.validate({
+          kind: 'LEFT_CLICK',
+          xRatio: 0.45,
+          yRatio: 0.6,
+        }),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    // Requester explicitly enables Layer-2 OS Remote Control
+    const liveSettings = await service.updateLiveControlSettings(
+      REQUESTER_A,
+      SESSION_ID,
+      UpdateLiveControlSettingsDto.validate({
+        remoteControlEnabled: true,
+        executeOnHostOs: false,
+      }),
+    );
+    expect(liveSettings.remoteControlEnabled).toBe(true);
+    expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'REMOTE_WEB_CONTROL_GRANTED',
+        }),
+      }),
+    );
+
+    // Now Technician CAN send LEFT_CLICK and KEY events from the Web UI
+    const clickRes = await service.sendRemoteInput(
+      TECH_ASSIGNED,
+      SESSION_ID,
+      SendRemoteInputDto.validate({
+        kind: 'LEFT_CLICK',
+        xRatio: 0.5,
+        yRatio: 0.5,
+      }),
+    );
+    expect(clickRes.event.kind).toBe('LEFT_CLICK');
   });
 });

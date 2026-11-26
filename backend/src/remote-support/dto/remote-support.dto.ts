@@ -14,6 +14,25 @@ const VALID_SESSION_STATUSES: ReadonlyArray<RemoteSessionStatus> = [
   'CANCELLED',
 ];
 
+export type RemoteInputKind =
+  | 'LASER'
+  | 'MOVE'
+  | 'LEFT_CLICK'
+  | 'RIGHT_CLICK'
+  | 'DOUBLE_CLICK'
+  | 'KEY'
+  | 'TEXT';
+
+const VALID_INPUT_KINDS: ReadonlyArray<RemoteInputKind> = [
+  'LASER',
+  'MOVE',
+  'LEFT_CLICK',
+  'RIGHT_CLICK',
+  'DOUBLE_CLICK',
+  'KEY',
+  'TEXT',
+];
+
 function normalizeRustdeskId(raw: string): string {
   return raw.replace(/\s+/g, '').trim();
 }
@@ -409,6 +428,159 @@ export class NotificationsQueryDto {
         throw new BadRequestException('limit must be an integer between 1 and 100');
       }
       dto.limit = parsed;
+    }
+
+    return dto;
+  }
+}
+
+export class PushLiveFrameDto {
+  frameDataUrl!: string;
+  width!: number;
+  height!: number;
+
+  static validate(input: unknown): PushLiveFrameDto {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid live screen frame payload');
+    }
+
+    const record = input as Record<string, unknown>;
+    if (
+      typeof record.frameDataUrl !== 'string' ||
+      (!record.frameDataUrl.startsWith('data:image/jpeg;base64,') &&
+        !record.frameDataUrl.startsWith('data:image/webp;base64,') &&
+        !record.frameDataUrl.startsWith('data:image/png;base64,')) ||
+      record.frameDataUrl.length > 1_800_000
+    ) {
+      throw new BadRequestException(
+        'frameDataUrl must be a valid base64 data:image URL under 1.8MB',
+      );
+    }
+
+    const width = Number(record.width ?? 1280);
+    const height = Number(record.height ?? 720);
+    if (
+      !Number.isFinite(width) ||
+      width < 64 ||
+      width > 7680 ||
+      !Number.isFinite(height) ||
+      height < 64 ||
+      height > 4320
+    ) {
+      throw new BadRequestException('Invalid frame dimensions');
+    }
+
+    const dto = new PushLiveFrameDto();
+    dto.frameDataUrl = record.frameDataUrl;
+    dto.width = Math.round(width);
+    dto.height = Math.round(height);
+    return dto;
+  }
+}
+
+export class UpdateLiveControlSettingsDto {
+  streaming?: boolean;
+  remoteControlEnabled?: boolean;
+  executeOnHostOs?: boolean;
+
+  static validate(input: unknown): UpdateLiveControlSettingsDto {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid live control settings payload');
+    }
+
+    const record = input as Record<string, unknown>;
+    const dto = new UpdateLiveControlSettingsDto();
+    let hasField = false;
+
+    if (record.streaming !== undefined) {
+      if (typeof record.streaming !== 'boolean') {
+        throw new BadRequestException('streaming must be a boolean');
+      }
+      dto.streaming = record.streaming;
+      hasField = true;
+    }
+
+    if (record.remoteControlEnabled !== undefined) {
+      if (typeof record.remoteControlEnabled !== 'boolean') {
+        throw new BadRequestException('remoteControlEnabled must be a boolean');
+      }
+      dto.remoteControlEnabled = record.remoteControlEnabled;
+      hasField = true;
+    }
+
+    if (record.executeOnHostOs !== undefined) {
+      if (typeof record.executeOnHostOs !== 'boolean') {
+        throw new BadRequestException('executeOnHostOs must be a boolean');
+      }
+      dto.executeOnHostOs = record.executeOnHostOs;
+      hasField = true;
+    }
+
+    if (!hasField) {
+      throw new BadRequestException('At least one live setting must be provided');
+    }
+
+    return dto;
+  }
+}
+
+export class SendRemoteInputDto {
+  kind!: RemoteInputKind;
+  xRatio?: number;
+  yRatio?: number;
+  key?: string;
+  text?: string;
+
+  static validate(input: unknown): SendRemoteInputDto {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid remote input payload');
+    }
+
+    const record = input as Record<string, unknown>;
+    if (
+      typeof record.kind !== 'string' ||
+      !VALID_INPUT_KINDS.includes(record.kind as RemoteInputKind)
+    ) {
+      throw new BadRequestException(
+        `kind must be one of: ${VALID_INPUT_KINDS.join(', ')}`,
+      );
+    }
+
+    const dto = new SendRemoteInputDto();
+    dto.kind = record.kind as RemoteInputKind;
+
+    if (record.xRatio !== undefined && record.xRatio !== null) {
+      const x = Number(record.xRatio);
+      if (!Number.isFinite(x) || x < 0 || x > 1) {
+        throw new BadRequestException('xRatio must be between 0 and 1');
+      }
+      dto.xRatio = x;
+    }
+
+    if (record.yRatio !== undefined && record.yRatio !== null) {
+      const y = Number(record.yRatio);
+      if (!Number.isFinite(y) || y < 0 || y > 1) {
+        throw new BadRequestException('yRatio must be between 0 and 1');
+      }
+      dto.yRatio = y;
+    }
+
+    if (record.key !== undefined && record.key !== null) {
+      if (typeof record.key !== 'string' || record.key.trim().length > 30) {
+        throw new BadRequestException('key must be a string up to 30 chars');
+      }
+      dto.key = record.key.trim().toUpperCase();
+    }
+
+    if (record.text !== undefined && record.text !== null) {
+      if (
+        typeof record.text !== 'string' ||
+        record.text.length === 0 ||
+        record.text.length > 200
+      ) {
+        throw new BadRequestException('text must be between 1 and 200 characters');
+      }
+      dto.text = record.text;
     }
 
     return dto;

@@ -13,17 +13,23 @@ import type {
   TicketStatus,
 } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { randomUUID } from 'node:crypto';
 import type {
   CancelRemoteSessionDto,
   CompleteRemoteSessionDto,
   CreateDeviceDto,
   FlagTicketRemoteSupportDto,
   NotificationsQueryDto,
+  PushLiveFrameDto,
   RejectRemoteSessionDto,
+  RemoteInputKind,
   RemoteSessionsQueryDto,
   RequestRemoteSessionDto,
+  SendRemoteInputDto,
   UpdateDeviceDto,
+  UpdateLiveControlSettingsDto,
 } from './dto/remote-support.dto.js';
+import { Win32InputBridge } from './win32-input-bridge.js';
 
 const ACTIVE_SESSION_STATUSES: RemoteSessionStatus[] = [
   'REQUESTED',
@@ -86,8 +92,42 @@ export interface RemoteSessionSnapshot {
   cliCommand: string | null;
 }
 
+export interface RemoteInputEventRecord {
+  id: string;
+  kind: RemoteInputKind;
+  xRatio?: number;
+  yRatio?: number;
+  key?: string;
+  text?: string;
+  actorName: string;
+  executedOnOs: boolean;
+  createdAt: number;
+}
+
+export interface LiveSessionStateSnapshot {
+  sessionId: string;
+  streaming: boolean;
+  remoteControlEnabled: boolean;
+  executeOnHostOs: boolean;
+  frameDataUrl: string | null;
+  frameWidth: number;
+  frameHeight: number;
+  frameUpdatedAt: number | null;
+  laserPointer: {
+    xRatio: number;
+    yRatio: number;
+    kind: RemoteInputKind;
+    actorName: string;
+    updatedAt: number;
+  } | null;
+  recentInputs: RemoteInputEventRecord[];
+  pendingInputs: RemoteInputEventRecord[];
+}
+
 @Injectable()
 export class RemoteSupportService {
+  private readonly liveSessions = new Map<string, LiveSessionStateSnapshot>();
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getClientConfig(): Promise<RustdeskClientConfigSnapshot> {
@@ -1003,6 +1043,7 @@ export class RemoteSupportService {
       return session;
     });
 
+    this.liveSessions.delete(sessionId);
     return this.toSessionSnapshot(updated, user);
   }
 
@@ -1126,7 +1167,265 @@ export class RemoteSupportService {
       return session;
     });
 
+    this.liveSessions.delete(sessionId);
     return this.toSessionSnapshot(updated, user);
+  }
+
+  /* =========================================================================
+     2B. IN-BROWSER LIVE SCREEN STREAMING, LASER POINTER & WEB-TO-OS CONTROL
+  ========================================================================= */
+
+  async getLiveSessionState(
+    user: AuthenticatedUser,
+    sessionId: string,
+    consumeInputs = false,
+  ): Promise<LiveSessionStateSnapshot> {
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+    const state = this.getOrCreateLiveState(session.id);
+
+    if (
+      state.laserPointer &&
+      Date.now() - state.laserPointer.updatedAt > 8_000
+    ) {
+      state.laserPointer = null;
+    }
+
+    const isOwnerRequester =
+      user.roles.includes('REQUESTER') && session.requesterId === user.id;
+
+    let pendingInputs: RemoteInputEventRecord[] = [];
+    if (isOwnerRequester && consumeInputs && state.pendingInputs.length > 0) {
+      pendingInputs = [...state.pendingInputs];
+      state.pendingInputs = [];
+    } else if (isOwnerRequester) {
+      pendingInputs = state.pendingInputs;
+    }
+
+    return {
+      ...state,
+      pendingInputs,
+    };
+  }
+
+  async updateLiveControlSettings(
+    user: AuthenticatedUser,
+    sessionId: string,
+    dto: UpdateLiveControlSettingsDto,
+  ): Promise<LiveSessionStateSnapshot> {
+    this.requireRequester(user);
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+
+    if (session.requesterId !== user.id) {
+      throw new ForbiddenException(
+        'Only the ticket Requester can grant or revoke live screen & OS control permissions',
+      );
+    }
+
+    const state = this.getOrCreateLiveState(session.id);
+    const previousControl = state.remoteControlEnabled;
+
+    if (dto.streaming !== undefined) {
+      state.streaming = dto.streaming;
+      if (!dto.streaming) {
+        state.frameDataUrl = null;
+        state.frameUpdatedAt = null;
+      }
+    }
+
+    if (dto.remoteControlEnabled !== undefined) {
+      state.remoteControlEnabled = dto.remoteControlEnabled;
+      if (!dto.remoteControlEnabled) {
+        state.pendingInputs = [];
+      }
+    }
+
+    if (dto.executeOnHostOs !== undefined) {
+      state.executeOnHostOs = dto.executeOnHostOs;
+    }
+
+    if (
+      dto.remoteControlEnabled !== undefined &&
+      dto.remoteControlEnabled !== previousControl
+    ) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          ticketId: session.ticketId,
+          action: dto.remoteControlEnabled
+            ? 'REMOTE_WEB_CONTROL_GRANTED'
+            : 'REMOTE_WEB_CONTROL_REVOKED',
+          entityType: 'REMOTE_SUPPORT_SESSION',
+          entityId: session.id,
+          beforeJson: JSON.stringify({
+            remoteControlEnabled: previousControl,
+          }),
+          afterJson: JSON.stringify({
+            remoteControlEnabled: state.remoteControlEnabled,
+            executeOnHostOs: state.executeOnHostOs,
+          }),
+        },
+      });
+    }
+
+    return state;
+  }
+
+  async pushLiveFrame(
+    user: AuthenticatedUser,
+    sessionId: string,
+    dto: PushLiveFrameDto,
+  ): Promise<{ ok: true; frameUpdatedAt: number }> {
+    this.requireRequester(user);
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+
+    if (session.requesterId !== user.id) {
+      throw new ForbiddenException(
+        'Only the ticket Requester can stream their screen to this session',
+      );
+    }
+
+    const state = this.getOrCreateLiveState(session.id);
+    const nowMs = Date.now();
+    state.streaming = true;
+    state.frameDataUrl = dto.frameDataUrl;
+    state.frameWidth = dto.width;
+    state.frameHeight = dto.height;
+    state.frameUpdatedAt = nowMs;
+
+    return { ok: true, frameUpdatedAt: nowMs };
+  }
+
+  async sendRemoteInput(
+    user: AuthenticatedUser,
+    sessionId: string,
+    dto: SendRemoteInputDto,
+  ): Promise<{ event: RemoteInputEventRecord }> {
+    this.requireTechnician(user);
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+
+    if (session.technicianId !== user.id) {
+      throw new ForbiddenException(
+        'Only the assigned Technician of this session can send remote interaction events',
+      );
+    }
+
+    const state = this.getOrCreateLiveState(session.id);
+    const nowMs = Date.now();
+
+    if (dto.kind !== 'LASER' && !state.remoteControlEnabled) {
+      throw new ForbiddenException(
+        'Người gửi chưa bật công tắc "Cho phép Điều khiển Chuột & Bàn phím" trên phiên này (Chỉ có thể dùng Tia Laser chỉ dẫn)',
+      );
+    }
+
+    if (dto.xRatio !== undefined && dto.yRatio !== undefined) {
+      state.laserPointer = {
+        xRatio: dto.xRatio,
+        yRatio: dto.yRatio,
+        kind: dto.kind,
+        actorName: user.fullName,
+        updatedAt: nowMs,
+      };
+    }
+
+    let executedOnOs = false;
+    if (
+      dto.kind !== 'LASER' &&
+      state.remoteControlEnabled &&
+      state.executeOnHostOs
+    ) {
+      executedOnOs = Win32InputBridge.execute({
+        kind: dto.kind,
+        xRatio: dto.xRatio,
+        yRatio: dto.yRatio,
+        key: dto.key,
+        text: dto.text,
+      });
+    }
+
+    const eventRecord: RemoteInputEventRecord = {
+      id: randomUUID(),
+      kind: dto.kind,
+      xRatio: dto.xRatio,
+      yRatio: dto.yRatio,
+      key: dto.key,
+      text: dto.text,
+      actorName: user.fullName,
+      executedOnOs,
+      createdAt: nowMs,
+    };
+
+    if (dto.kind !== 'LASER') {
+      state.recentInputs = [eventRecord, ...state.recentInputs].slice(0, 15);
+      if (!executedOnOs) {
+        state.pendingInputs = [...state.pendingInputs, eventRecord].slice(-30);
+      }
+    }
+
+    return { event: eventRecord };
+  }
+
+  private getOrCreateLiveState(sessionId: string): LiveSessionStateSnapshot {
+    const existing = this.liveSessions.get(sessionId);
+    if (existing) {
+      return existing;
+    }
+
+    const initial: LiveSessionStateSnapshot = {
+      sessionId,
+      streaming: false,
+      remoteControlEnabled: false,
+      executeOnHostOs: true,
+      frameDataUrl: null,
+      frameWidth: 1280,
+      frameHeight: 720,
+      frameUpdatedAt: null,
+      laserPointer: null,
+      recentInputs: [],
+      pendingInputs: [],
+    };
+    this.liveSessions.set(sessionId, initial);
+    return initial;
+  }
+
+  private async assertLiveSessionAccess(
+    user: AuthenticatedUser,
+    sessionId: string,
+  ) {
+    const session = await this.prisma.remoteSupportSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        ticketId: true,
+        requesterId: true,
+        technicianId: true,
+        status: true,
+        approvalExpiresAt: true,
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Remote support session not found');
+    }
+
+    const canAccess =
+      user.roles.includes('SUPERVISOR') ||
+      (user.roles.includes('REQUESTER') && session.requesterId === user.id) ||
+      (user.roles.includes('TECHNICIAN') && session.technicianId === user.id);
+
+    if (!canAccess) {
+      throw new ForbiddenException(
+        'You do not have access to this live remote support session',
+      );
+    }
+
+    if (session.status !== 'APPROVED' && session.status !== 'IN_PROGRESS') {
+      throw new ConflictException(
+        `Live web remote session is only available when status is APPROVED or IN_PROGRESS (current: ${session.status})`,
+      );
+    }
+
+    return session;
   }
 
   async listSessions(

@@ -19,10 +19,13 @@ import {
   CreateDeviceDto,
   FlagTicketRemoteSupportDto,
   NotificationsQueryDto,
+  PushLiveFrameDto,
   RejectRemoteSessionDto,
   RemoteSessionsQueryDto,
   RequestRemoteSessionDto,
+  SendRemoteInputDto,
   UpdateDeviceDto,
+  UpdateLiveControlSettingsDto,
 } from './dto/remote-support.dto.js';
 import { RemoteSupportService } from './remote-support.service.js';
 
@@ -182,6 +185,64 @@ export class RemoteSupportController {
       CancelRemoteSessionDto.validate(body),
     );
     return { session };
+  }
+
+  @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR')
+  @Get('sessions/:id/live')
+  async getLiveSessionState(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query('consumeInputs') consumeInputs?: string,
+  ) {
+    const live = await this.remoteSupportService.getLiveSessionState(
+      request.user,
+      id,
+      consumeInputs === 'true',
+    );
+    return { live };
+  }
+
+  @Roles('REQUESTER')
+  @Patch('sessions/:id/live-settings')
+  async updateLiveControlSettings(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const live = await this.remoteSupportService.updateLiveControlSettings(
+      request.user,
+      id,
+      UpdateLiveControlSettingsDto.validate(body),
+    );
+    return { live };
+  }
+
+  @Roles('REQUESTER')
+  @Post('sessions/:id/live-frame')
+  async pushLiveFrame(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    return this.remoteSupportService.pushLiveFrame(
+      request.user,
+      id,
+      PushLiveFrameDto.validate(body),
+    );
+  }
+
+  @Roles('TECHNICIAN')
+  @Post('sessions/:id/live-input')
+  async sendRemoteInput(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    return this.remoteSupportService.sendRemoteInput(
+      request.user,
+      id,
+      SendRemoteInputDto.validate(body),
+    );
   }
 
   @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR')
