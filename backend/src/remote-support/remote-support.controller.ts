@@ -26,6 +26,7 @@ import {
   SendRemoteInputDto,
   UpdateDeviceDto,
   UpdateLiveControlSettingsDto,
+  WebRtcSignalDto,
 } from './dto/remote-support.dto.js';
 import { RemoteSupportService } from './remote-support.service.js';
 
@@ -243,6 +244,21 @@ export class RemoteSupportController {
       id,
       SendRemoteInputDto.validate(body),
     );
+  }
+
+  @Roles('REQUESTER', 'TECHNICIAN')
+  @Post('sessions/:id/webrtc-signal')
+  async exchangeWebRtcSignal(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const webrtc = await this.remoteSupportService.exchangeWebRtcSignal(
+      request.user,
+      id,
+      WebRtcSignalDto.validate(body),
+    );
+    return { webrtc };
   }
 
   @Roles('REQUESTER', 'TECHNICIAN', 'SUPERVISOR')

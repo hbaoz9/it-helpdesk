@@ -291,6 +291,22 @@ export interface RemoteInputEventRecord {
   createdAt: number;
 }
 
+export interface WebRtcIceCandidateRecord {
+  candidate: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+}
+
+export interface WebRtcSignalSnapshotRecord {
+  offerGeneration: number;
+  sdpOffer: { type: 'offer'; sdp: string } | null;
+  sdpAnswer: { type: 'answer'; sdp: string } | null;
+  requesterIceCandidates: WebRtcIceCandidateRecord[];
+  technicianIceCandidates: WebRtcIceCandidateRecord[];
+  p2pConnected: boolean;
+  renegotiateRequested: boolean;
+}
+
 export interface LiveSessionStateRecord {
   sessionId: string;
   streaming: boolean;
@@ -307,6 +323,7 @@ export interface LiveSessionStateRecord {
     actorName: string;
     updatedAt: number;
   } | null;
+  webrtc: WebRtcSignalSnapshotRecord;
   recentInputs: RemoteInputEventRecord[];
   pendingInputs: RemoteInputEventRecord[];
 }

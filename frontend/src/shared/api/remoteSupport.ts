@@ -8,6 +8,8 @@ import type {
   RustdeskClientConfig,
   TicketRemoteSupportContext,
   UserDeviceRecord,
+  WebRtcIceCandidateRecord,
+  WebRtcSignalSnapshotRecord,
 } from './types';
 
 export interface CreateDevicePayload {
@@ -275,4 +277,24 @@ export async function sendRemoteInput(
       body: JSON.stringify(payload),
     },
   );
+}
+
+export async function exchangeWebRtcSignal(
+  sessionId: string,
+  payload: {
+    sdpOffer?: { type: 'offer'; sdp: string };
+    sdpAnswer?: { type: 'answer'; sdp: string };
+    iceCandidate?: WebRtcIceCandidateRecord;
+    p2pConnected?: boolean;
+    requestRenegotiate?: boolean;
+  },
+): Promise<WebRtcSignalSnapshotRecord> {
+  const result = await apiRequest<{ webrtc: WebRtcSignalSnapshotRecord }>(
+    `/remote-support/sessions/${sessionId}/webrtc-signal`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.webrtc;
 }

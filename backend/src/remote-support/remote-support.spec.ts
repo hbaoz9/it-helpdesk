@@ -14,6 +14,7 @@ import {
   RequestRemoteSessionDto,
   SendRemoteInputDto,
   UpdateLiveControlSettingsDto,
+  WebRtcSignalDto,
 } from './dto/remote-support.dto.js';
 import { RemoteSupportService } from './remote-support.service.js';
 
@@ -724,5 +725,56 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
       }),
     );
     expect(clickRes.event.kind).toBe('LEFT_CLICK');
+  });
+
+  it('10. WebRTC P2P 60 FPS Signaling: exchanges SDP Offer, SDP Answer, and ICE candidates with strict role enforcement', async () => {
+    mockPrisma.remoteSupportSession.findUnique.mockResolvedValue({
+      id: SESSION_ID,
+      ticketId: TICKET_ID,
+      requesterId: REQUESTER_A.id,
+      technicianId: TECH_ASSIGNED.id,
+      status: 'APPROVED',
+      approvalExpiresAt: new Date(Date.now() + 600_000),
+    });
+
+    // Technician cannot publish SDP Offer (only Requester shares screen)
+    await expect(
+      service.exchangeWebRtcSignal(
+        TECH_ASSIGNED,
+        SESSION_ID,
+        WebRtcSignalDto.validate({
+          sdpOffer: { type: 'offer', sdp: 'v=0...offer' },
+        }),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    // Requester publishes SDP Offer
+    const afterOffer = await service.exchangeWebRtcSignal(
+      REQUESTER_A,
+      SESSION_ID,
+      WebRtcSignalDto.validate({
+        sdpOffer: { type: 'offer', sdp: 'v=0...offer' },
+        iceCandidate: {
+          candidate: 'candidate:1 1 UDP 2122252543 127.0.0.1 54321 typ host',
+          sdpMid: '0',
+          sdpMLineIndex: 0,
+        },
+      }),
+    );
+    expect(afterOffer.offerGeneration).toBe(1);
+    expect(afterOffer.sdpOffer?.sdp).toBe('v=0...offer');
+    expect(afterOffer.requesterIceCandidates).toHaveLength(1);
+
+    // Technician publishes SDP Answer & marks P2P connected
+    const afterAnswer = await service.exchangeWebRtcSignal(
+      TECH_ASSIGNED,
+      SESSION_ID,
+      WebRtcSignalDto.validate({
+        sdpAnswer: { type: 'answer', sdp: 'v=0...answer' },
+        p2pConnected: true,
+      }),
+    );
+    expect(afterAnswer.sdpAnswer?.sdp).toBe('v=0...answer');
+    expect(afterAnswer.p2pConnected).toBe(true);
   });
 });

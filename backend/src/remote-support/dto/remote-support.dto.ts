@@ -586,3 +586,103 @@ export class SendRemoteInputDto {
     return dto;
   }
 }
+
+export interface WebRtcIceCandidateInput {
+  candidate: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+}
+
+export class WebRtcSignalDto {
+  sdpOffer?: { type: 'offer'; sdp: string };
+  sdpAnswer?: { type: 'answer'; sdp: string };
+  iceCandidate?: WebRtcIceCandidateInput;
+  p2pConnected?: boolean;
+  requestRenegotiate?: boolean;
+
+  static validate(input: unknown): WebRtcSignalDto {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid WebRTC signal payload');
+    }
+
+    const record = input as Record<string, unknown>;
+    const dto = new WebRtcSignalDto();
+    let hasField = false;
+
+    if (record.sdpOffer !== undefined && record.sdpOffer !== null) {
+      if (typeof record.sdpOffer !== 'object') {
+        throw new BadRequestException('sdpOffer must be an object');
+      }
+      const offer = record.sdpOffer as Record<string, unknown>;
+      if (
+        offer.type !== 'offer' ||
+        typeof offer.sdp !== 'string' ||
+        offer.sdp.length === 0 ||
+        offer.sdp.length > 100_000
+      ) {
+        throw new BadRequestException('Invalid sdpOffer description');
+      }
+      dto.sdpOffer = { type: 'offer', sdp: offer.sdp };
+      hasField = true;
+    }
+
+    if (record.sdpAnswer !== undefined && record.sdpAnswer !== null) {
+      if (typeof record.sdpAnswer !== 'object') {
+        throw new BadRequestException('sdpAnswer must be an object');
+      }
+      const answer = record.sdpAnswer as Record<string, unknown>;
+      if (
+        answer.type !== 'answer' ||
+        typeof answer.sdp !== 'string' ||
+        answer.sdp.length === 0 ||
+        answer.sdp.length > 100_000
+      ) {
+        throw new BadRequestException('Invalid sdpAnswer description');
+      }
+      dto.sdpAnswer = { type: 'answer', sdp: answer.sdp };
+      hasField = true;
+    }
+
+    if (record.iceCandidate !== undefined && record.iceCandidate !== null) {
+      if (typeof record.iceCandidate !== 'object') {
+        throw new BadRequestException('iceCandidate must be an object');
+      }
+      const cand = record.iceCandidate as Record<string, unknown>;
+      if (
+        typeof cand.candidate !== 'string' ||
+        cand.candidate.length > 10_000
+      ) {
+        throw new BadRequestException('Invalid ICE candidate string');
+      }
+      dto.iceCandidate = {
+        candidate: cand.candidate,
+        sdpMid: typeof cand.sdpMid === 'string' ? cand.sdpMid : null,
+        sdpMLineIndex:
+          typeof cand.sdpMLineIndex === 'number' ? cand.sdpMLineIndex : null,
+      };
+      hasField = true;
+    }
+
+    if (record.p2pConnected !== undefined) {
+      if (typeof record.p2pConnected !== 'boolean') {
+        throw new BadRequestException('p2pConnected must be a boolean');
+      }
+      dto.p2pConnected = record.p2pConnected;
+      hasField = true;
+    }
+
+    if (record.requestRenegotiate !== undefined) {
+      if (typeof record.requestRenegotiate !== 'boolean') {
+        throw new BadRequestException('requestRenegotiate must be a boolean');
+      }
+      dto.requestRenegotiate = record.requestRenegotiate;
+      hasField = true;
+    }
+
+    if (!hasField) {
+      throw new BadRequestException('At least one WebRTC signal field is required');
+    }
+
+    return dto;
+  }
+}

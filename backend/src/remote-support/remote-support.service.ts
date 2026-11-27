@@ -28,6 +28,8 @@ import type {
   SendRemoteInputDto,
   UpdateDeviceDto,
   UpdateLiveControlSettingsDto,
+  WebRtcIceCandidateInput,
+  WebRtcSignalDto,
 } from './dto/remote-support.dto.js';
 import { Win32InputBridge } from './win32-input-bridge.js';
 
@@ -104,6 +106,16 @@ export interface RemoteInputEventRecord {
   createdAt: number;
 }
 
+export interface WebRtcSignalSnapshot {
+  offerGeneration: number;
+  sdpOffer: { type: 'offer'; sdp: string } | null;
+  sdpAnswer: { type: 'answer'; sdp: string } | null;
+  requesterIceCandidates: WebRtcIceCandidateInput[];
+  technicianIceCandidates: WebRtcIceCandidateInput[];
+  p2pConnected: boolean;
+  renegotiateRequested: boolean;
+}
+
 export interface LiveSessionStateSnapshot {
   sessionId: string;
   streaming: boolean;
@@ -120,6 +132,7 @@ export interface LiveSessionStateSnapshot {
     actorName: string;
     updatedAt: number;
   } | null;
+  webrtc: WebRtcSignalSnapshot;
   recentInputs: RemoteInputEventRecord[];
   pendingInputs: RemoteInputEventRecord[];
 }
@@ -1229,6 +1242,15 @@ export class RemoteSupportService {
       if (!dto.streaming) {
         state.frameDataUrl = null;
         state.frameUpdatedAt = null;
+        state.webrtc = {
+          offerGeneration: state.webrtc.offerGeneration + 1,
+          sdpOffer: null,
+          sdpAnswer: null,
+          requesterIceCandidates: [],
+          technicianIceCandidates: [],
+          p2pConnected: false,
+          renegotiateRequested: false,
+        };
       }
     }
 
@@ -1365,6 +1387,77 @@ export class RemoteSupportService {
     return { event: eventRecord };
   }
 
+  async exchangeWebRtcSignal(
+    user: AuthenticatedUser,
+    sessionId: string,
+    dto: WebRtcSignalDto,
+  ): Promise<WebRtcSignalSnapshot> {
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+    const state = this.getOrCreateLiveState(session.id);
+
+    const isOwnerRequester =
+      user.roles.includes('REQUESTER') && session.requesterId === user.id;
+    const isOwnerTechnician =
+      user.roles.includes('TECHNICIAN') && session.technicianId === user.id;
+
+    if (!isOwnerRequester && !isOwnerTechnician) {
+      throw new ForbiddenException(
+        'Only the session Requester or assigned Technician can exchange WebRTC signaling',
+      );
+    }
+
+    if (dto.sdpOffer) {
+      if (!isOwnerRequester) {
+        throw new ForbiddenException(
+          'Only the screen-sharing Requester can publish a WebRTC SDP Offer',
+        );
+      }
+      state.streaming = true;
+      state.webrtc = {
+        offerGeneration: state.webrtc.offerGeneration + 1,
+        sdpOffer: dto.sdpOffer,
+        sdpAnswer: null,
+        requesterIceCandidates: [],
+        technicianIceCandidates: [],
+        p2pConnected: false,
+        renegotiateRequested: false,
+      };
+    }
+
+    if (dto.sdpAnswer) {
+      if (!isOwnerTechnician) {
+        throw new ForbiddenException(
+          'Only the assigned Technician can publish a WebRTC SDP Answer',
+        );
+      }
+      state.webrtc.sdpAnswer = dto.sdpAnswer;
+    }
+
+    if (dto.iceCandidate) {
+      if (isOwnerRequester) {
+        state.webrtc.requesterIceCandidates = [
+          ...state.webrtc.requesterIceCandidates,
+          dto.iceCandidate,
+        ].slice(-40);
+      } else if (isOwnerTechnician) {
+        state.webrtc.technicianIceCandidates = [
+          ...state.webrtc.technicianIceCandidates,
+          dto.iceCandidate,
+        ].slice(-40);
+      }
+    }
+
+    if (dto.p2pConnected !== undefined) {
+      state.webrtc.p2pConnected = dto.p2pConnected;
+    }
+
+    if (dto.requestRenegotiate && isOwnerTechnician) {
+      state.webrtc.renegotiateRequested = true;
+    }
+
+    return state.webrtc;
+  }
+
   private getOrCreateLiveState(sessionId: string): LiveSessionStateSnapshot {
     const existing = this.liveSessions.get(sessionId);
     if (existing) {
@@ -1381,6 +1474,15 @@ export class RemoteSupportService {
       frameHeight: 720,
       frameUpdatedAt: null,
       laserPointer: null,
+      webrtc: {
+        offerGeneration: 0,
+        sdpOffer: null,
+        sdpAnswer: null,
+        requesterIceCandidates: [],
+        technicianIceCandidates: [],
+        p2pConnected: false,
+        renegotiateRequested: false,
+      },
       recentInputs: [],
       pendingInputs: [],
     };
