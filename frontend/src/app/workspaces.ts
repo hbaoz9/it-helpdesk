@@ -44,4 +44,6 @@ export const menu = [
   { path: '/admin/asset-maintenance', label: 'Bảo trì tài sản', workspace: 'admin' },
   { path: '/admin/asset-history', label: 'Lịch sử tài sản', workspace: 'admin' },
   { path: '/admin/asset-categories', label: 'Danh mục tài sản', workspace: 'admin' },
+  { path: '/admin/rustdesk', label: 'Thiết bị & RustDesk', workspace: 'admin' },
+  { path: '/admin/audit', label: 'Nhật ký Audit', workspace: 'admin' },
 ] as const satisfies ReadonlyArray<{ path: string; label: string; workspace: Workspace }>;

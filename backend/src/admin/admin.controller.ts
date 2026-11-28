@@ -15,12 +15,16 @@ import { Roles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { AdminService } from './admin.service.js';
 import {
+  AdminAuditLogsQueryDto,
   AdminCategoriesQueryDto,
+  AdminDevicesQueryDto,
   AdminUsersQueryDto,
   CreateAdminCategoryDto,
   CreateAdminUserDto,
   UpdateAdminCategoryDto,
+  UpdateAdminDeviceDto,
   UpdateAdminUserDto,
+  UpdateRustdeskConfigDto,
   UpdateSlaPolicyDto,
 } from './dto/admin.dto.js';
 
@@ -116,5 +120,53 @@ export class AdminController {
       UpdateSlaPolicyDto.validate(body),
     );
     return { slaPolicy };
+  }
+
+  @Get('devices')
+  async listDevices(@Query() query: Record<string, unknown>) {
+    const devices = await this.adminService.listDevices(
+      AdminDevicesQueryDto.validate(query),
+    );
+    return { devices };
+  }
+
+  @Patch('devices/:id')
+  async updateDevice(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const device = await this.adminService.updateDevice(
+      request.user,
+      id,
+      UpdateAdminDeviceDto.validate(body),
+    );
+    return { device };
+  }
+
+  @Get('rustdesk-config')
+  async getRustdeskConfig() {
+    const config = await this.adminService.getRustdeskConfig();
+    return { config };
+  }
+
+  @Patch('rustdesk-config')
+  async updateRustdeskConfig(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: unknown,
+  ) {
+    const config = await this.adminService.updateRustdeskConfig(
+      request.user,
+      UpdateRustdeskConfigDto.validate(body),
+    );
+    return { config };
+  }
+
+  @Get('audit-logs')
+  async listAuditLogs(@Query() query: Record<string, unknown>) {
+    const auditLogs = await this.adminService.listAuditLogs(
+      AdminAuditLogsQueryDto.validate(query),
+    );
+    return { auditLogs };
   }
 }

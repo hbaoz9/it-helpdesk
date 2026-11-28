@@ -77,6 +77,8 @@ export default function AppRouter() {
       <Route path="asset-maintenance" element={<AssetMaintenancePage />} />
       <Route path="asset-history" element={<AssetHistoryPage />} />
       <Route path="asset-categories" element={<AssetCategoriesPage />} />
+      <Route path="rustdesk" element={<AdminHomePage />} />
+      <Route path="audit" element={<AdminHomePage />} />
     </Route>
     <Route path="*" element={<EntryRoute />} />
   </Routes></BrowserRouter>;

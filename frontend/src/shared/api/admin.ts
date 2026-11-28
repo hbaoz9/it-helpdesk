@@ -1,8 +1,12 @@
 import { apiRequest } from './client';
 import type {
+  AdminAuditLogRecord,
   AdminCategoryRecord,
+  AdminDeviceRecord,
+  AdminRustdeskConfigRecord,
   AdminSlaPolicyRecord,
   AdminUserRecord,
+  DeviceVerificationStatus,
   RoleCode,
 } from './types';
 
@@ -156,4 +160,91 @@ export async function updateAdminSlaPolicy(
     },
   );
   return result.slaPolicy;
+}
+
+export interface AdminDevicesFilter {
+  search?: string;
+  active?: 'true' | 'false' | '';
+  verificationStatus?: DeviceVerificationStatus | '';
+}
+
+export interface UpdateAdminDevicePayload {
+  label?: string;
+  active?: boolean;
+  verificationStatus?: DeviceVerificationStatus;
+  observedRustdeskId?: string;
+  verificationMethod?: 'IN_PERSON';
+  reason?: string;
+}
+
+export interface UpdateRustdeskConfigPayload {
+  idServerHost: string;
+  relayServerHost?: string | null;
+  publicKey?: string | null;
+  approvalTtlMinutes: number;
+  clientGuideUrl?: string | null;
+  enabled: boolean;
+  reason?: string;
+}
+
+export async function getAdminDevices(
+  filter: AdminDevicesFilter = {},
+): Promise<AdminDeviceRecord[]> {
+  const query = buildQuery({
+    search: filter.search,
+    active: filter.active,
+    verificationStatus: filter.verificationStatus,
+  });
+  const result = await apiRequest<{ devices: AdminDeviceRecord[] }>(
+    `/admin/devices${query}`,
+  );
+  return result.devices;
+}
+
+export async function updateAdminDevice(
+  id: string,
+  payload: UpdateAdminDevicePayload,
+): Promise<AdminDeviceRecord> {
+  const result = await apiRequest<{ device: AdminDeviceRecord }>(
+    `/admin/devices/${id}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.device;
+}
+
+export async function getAdminRustdeskConfig(): Promise<AdminRustdeskConfigRecord> {
+  const result = await apiRequest<{ config: AdminRustdeskConfigRecord }>(
+    '/admin/rustdesk-config',
+  );
+  return result.config;
+}
+
+export async function updateAdminRustdeskConfig(
+  payload: UpdateRustdeskConfigPayload,
+): Promise<AdminRustdeskConfigRecord> {
+  const result = await apiRequest<{ config: AdminRustdeskConfigRecord }>(
+    '/admin/rustdesk-config',
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.config;
+}
+
+export async function getAdminAuditLogs(
+  entityType?: string,
+  limit = 50,
+): Promise<AdminAuditLogRecord[]> {
+  const query = buildQuery({
+    entityType,
+    limit: String(limit),
+  });
+  const result = await apiRequest<{ auditLogs: AdminAuditLogRecord[] }>(
+    `/admin/audit-logs${query}`,
+  );
+  return result.auditLogs;
 }

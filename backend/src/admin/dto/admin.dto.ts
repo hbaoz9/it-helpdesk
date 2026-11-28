@@ -376,3 +376,304 @@ export class UpdateSlaPolicyDto {
     return dto;
   }
 }
+
+const VALID_VERIFICATION_STATUSES = ['PENDING', 'VERIFIED', 'REVOKED'] as const;
+export type DeviceVerificationStatusInput =
+  (typeof VALID_VERIFICATION_STATUSES)[number];
+
+export class AdminDevicesQueryDto {
+  search?: string;
+  active?: boolean;
+  verificationStatus?: DeviceVerificationStatusInput;
+
+  static validate(input: unknown): AdminDevicesQueryDto {
+    if (input === undefined || input === null) {
+      return new AdminDevicesQueryDto();
+    }
+
+    if (typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid device query parameters');
+    }
+
+    const record = input as Record<string, unknown>;
+    const dto = new AdminDevicesQueryDto();
+
+    if (record.search !== undefined) {
+      if (typeof record.search !== 'string') {
+        throw new BadRequestException('Query parameter search must be a string');
+      }
+      const trimmed = record.search.trim();
+      if (trimmed.length > 0) {
+        dto.search = trimmed;
+      }
+    }
+
+    if (record.active !== undefined && record.active !== '') {
+      dto.active = parseBooleanQuery(record.active, 'active');
+    }
+
+    if (
+      record.verificationStatus !== undefined &&
+      record.verificationStatus !== ''
+    ) {
+      if (
+        typeof record.verificationStatus !== 'string' ||
+        !VALID_VERIFICATION_STATUSES.includes(
+          record.verificationStatus as DeviceVerificationStatusInput,
+        )
+      ) {
+        throw new BadRequestException(
+          'Query parameter verificationStatus must be PENDING, VERIFIED, or REVOKED',
+        );
+      }
+      dto.verificationStatus =
+        record.verificationStatus as DeviceVerificationStatusInput;
+    }
+
+    return dto;
+  }
+}
+
+export class UpdateAdminDeviceDto {
+  label?: string;
+  active?: boolean;
+  verificationStatus?: DeviceVerificationStatusInput;
+  observedRustdeskId?: string;
+  verificationMethod?: 'IN_PERSON';
+  reason?: string;
+
+  static validate(input: unknown): UpdateAdminDeviceDto {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid admin device update payload');
+    }
+
+    const record = input as Record<string, unknown>;
+    const dto = new UpdateAdminDeviceDto();
+    let hasField = false;
+
+    if (record.label !== undefined) {
+      if (
+        typeof record.label !== 'string' ||
+        record.label.trim().length < 2 ||
+        record.label.trim().length > 120
+      ) {
+        throw new BadRequestException(
+          'Device label must be between 2 and 120 characters',
+        );
+      }
+      dto.label = record.label.trim();
+      hasField = true;
+    }
+
+    if (record.active !== undefined) {
+      if (typeof record.active !== 'boolean') {
+        throw new BadRequestException('active must be a boolean');
+      }
+      dto.active = record.active;
+      hasField = true;
+    }
+
+    if (record.verificationStatus !== undefined) {
+      if (
+        typeof record.verificationStatus !== 'string' ||
+        !VALID_VERIFICATION_STATUSES.includes(
+          record.verificationStatus as DeviceVerificationStatusInput,
+        )
+      ) {
+        throw new BadRequestException(
+          'verificationStatus must be PENDING, VERIFIED, or REVOKED',
+        );
+      }
+      dto.verificationStatus =
+        record.verificationStatus as DeviceVerificationStatusInput;
+      hasField = true;
+    }
+
+    if (record.reason !== undefined && record.reason !== null) {
+      if (
+        typeof record.reason !== 'string' ||
+        record.reason.trim().length > 500
+      ) {
+        throw new BadRequestException('reason must not exceed 500 characters');
+      }
+      const trimmed = record.reason.trim();
+      if (trimmed.length > 0) {
+        dto.reason = trimmed;
+      }
+    }
+
+    if (dto.verificationStatus === 'VERIFIED') {
+      if (record.verificationMethod !== 'IN_PERSON') {
+        throw new BadRequestException('In-person verification is required');
+      }
+      if (typeof record.observedRustdeskId !== 'string') {
+        throw new BadRequestException('Observed RustDesk ID is required');
+      }
+      dto.observedRustdeskId = record.observedRustdeskId.replace(/\s+/g, '');
+      dto.verificationMethod = 'IN_PERSON';
+      if (!dto.reason || dto.reason.length < 20) {
+        throw new BadRequestException('Verification evidence must be at least 20 characters');
+      }
+    }
+
+    if (!hasField) {
+      throw new BadRequestException('At least one device field is required');
+    }
+
+    return dto;
+  }
+}
+
+export class UpdateRustdeskConfigDto {
+  idServerHost!: string;
+  relayServerHost?: string | null;
+  publicKey?: string | null;
+  approvalTtlMinutes!: number;
+  clientGuideUrl?: string | null;
+  enabled!: boolean;
+  reason?: string;
+
+  static validate(input: unknown): UpdateRustdeskConfigDto {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid RustDesk server config payload');
+    }
+
+    const record = input as Record<string, unknown>;
+    if (
+      typeof record.idServerHost !== 'string' ||
+      record.idServerHost.trim().length < 3 ||
+      record.idServerHost.trim().length > 255
+    ) {
+      throw new BadRequestException(
+        'idServerHost must be between 3 and 255 characters',
+      );
+    }
+
+    const approvalTtlMinutes = Number(record.approvalTtlMinutes ?? 15);
+    if (
+      !Number.isInteger(approvalTtlMinutes) ||
+      approvalTtlMinutes < 1 ||
+      approvalTtlMinutes > 120
+    ) {
+      throw new BadRequestException(
+        'approvalTtlMinutes must be an integer between 1 and 120',
+      );
+    }
+
+    if (record.enabled !== undefined && typeof record.enabled !== 'boolean') {
+      throw new BadRequestException('enabled must be a boolean');
+    }
+
+    const dto = new UpdateRustdeskConfigDto();
+    dto.idServerHost = record.idServerHost.trim();
+    dto.approvalTtlMinutes = approvalTtlMinutes;
+    dto.enabled = (record.enabled as boolean | undefined) ?? false;
+
+    if (record.relayServerHost !== undefined) {
+      if (record.relayServerHost === null || record.relayServerHost === '') {
+        dto.relayServerHost = null;
+      } else if (
+        typeof record.relayServerHost === 'string' &&
+        record.relayServerHost.trim().length <= 255
+      ) {
+        dto.relayServerHost = record.relayServerHost.trim();
+      } else {
+        throw new BadRequestException(
+          'relayServerHost must not exceed 255 characters',
+        );
+      }
+    }
+
+    if (record.publicKey !== undefined) {
+      if (record.publicKey === null || record.publicKey === '') {
+        dto.publicKey = null;
+      } else if (
+        typeof record.publicKey === 'string' &&
+        record.publicKey.trim().length <= 255
+      ) {
+        if (record.publicKey.includes('PRIVATE KEY')) {
+          throw new BadRequestException(
+            'Never store private keys in RustDesk config; only the public key (id_ed25519.pub) is allowed',
+          );
+        }
+        dto.publicKey = record.publicKey.trim();
+      } else {
+        throw new BadRequestException(
+          'publicKey must not exceed 255 characters',
+        );
+      }
+    }
+
+    if (record.clientGuideUrl !== undefined) {
+      if (record.clientGuideUrl === null || record.clientGuideUrl === '') {
+        dto.clientGuideUrl = null;
+      } else if (
+        typeof record.clientGuideUrl === 'string' &&
+        record.clientGuideUrl.trim().length <= 500
+      ) {
+        dto.clientGuideUrl = record.clientGuideUrl.trim();
+      } else {
+        throw new BadRequestException(
+          'clientGuideUrl must not exceed 500 characters',
+        );
+      }
+    }
+
+    if (record.reason !== undefined && record.reason !== null) {
+      if (
+        typeof record.reason !== 'string' ||
+        record.reason.trim().length > 500
+      ) {
+        throw new BadRequestException('reason must not exceed 500 characters');
+      }
+      const trimmed = record.reason.trim();
+      if (trimmed.length > 0) {
+        dto.reason = trimmed;
+      }
+    }
+
+    return dto;
+  }
+}
+
+export class AdminAuditLogsQueryDto {
+  entityType?: string;
+  action?: string;
+  limit = 50;
+
+  static validate(input: unknown): AdminAuditLogsQueryDto {
+    const dto = new AdminAuditLogsQueryDto();
+    if (input === undefined || input === null) {
+      return dto;
+    }
+
+    if (typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid audit log query parameters');
+    }
+
+    const record = input as Record<string, unknown>;
+    if (record.entityType !== undefined && record.entityType !== '') {
+      if (typeof record.entityType !== 'string') {
+        throw new BadRequestException('entityType must be a string');
+      }
+      dto.entityType = record.entityType.trim();
+    }
+
+    if (record.action !== undefined && record.action !== '') {
+      if (typeof record.action !== 'string') {
+        throw new BadRequestException('action must be a string');
+      }
+      dto.action = record.action.trim();
+    }
+
+    if (record.limit !== undefined && record.limit !== '') {
+      const parsed = Number(record.limit);
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 200) {
+        throw new BadRequestException('limit must be between 1 and 200');
+      }
+      dto.limit = parsed;
+    }
+
+    return dto;
+  }
+}
