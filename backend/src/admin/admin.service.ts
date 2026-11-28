@@ -662,6 +662,26 @@ export class AdminService {
         },
       });
 
+      if (
+        dto.active === false ||
+        (dto.verificationStatus !== undefined &&
+          dto.verificationStatus !== 'VERIFIED')
+      ) {
+        await tx.remoteSupportSession.updateMany({
+          where: {
+            deviceId: device.id,
+            status: { in: ['REQUESTED', 'APPROVED', 'IN_PROGRESS'] },
+          },
+          data: {
+            status: 'CANCELLED',
+            endedAt: new Date(),
+            cancelReason:
+              dto.reason ??
+              `Administrator updated device status (active: ${device.active}, verification: ${device.verificationStatus})`,
+          },
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           actorId: actor.id,

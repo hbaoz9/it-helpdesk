@@ -15,7 +15,7 @@ CREATE TABLE "user_devices" (
     "label" TEXT NOT NULL,
     "rustdesk_id" TEXT NOT NULL,
     "os_name" TEXT,
-    "verification_status" "DeviceVerificationStatus" NOT NULL DEFAULT 'VERIFIED',
+    "verification_status" "DeviceVerificationStatus" NOT NULL DEFAULT 'PENDING',
     "active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -85,6 +85,15 @@ CREATE INDEX "remote_support_sessions_technician_id_status_idx" ON "remote_suppo
 
 -- CreateIndex
 CREATE INDEX "remote_support_sessions_status_requested_at_idx" ON "remote_support_sessions"("status", "requested_at");
+
+-- Partial Unique Indexes: Enforce at DB level that at most one active session (REQUESTED, APPROVED, IN_PROGRESS) can exist per ticket or per device
+CREATE UNIQUE INDEX "remote_support_sessions_active_ticket_uq"
+ON "remote_support_sessions"("ticket_id")
+WHERE "status" IN ('REQUESTED', 'APPROVED', 'IN_PROGRESS');
+
+CREATE UNIQUE INDEX "remote_support_sessions_active_device_uq"
+ON "remote_support_sessions"("device_id")
+WHERE "status" IN ('REQUESTED', 'APPROVED', 'IN_PROGRESS');
 
 -- CreateIndex
 CREATE UNIQUE INDEX "rustdesk_server_configs_singleton_key_key" ON "rustdesk_server_configs"("singleton_key");

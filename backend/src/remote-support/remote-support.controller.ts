@@ -26,6 +26,7 @@ import {
   SendRemoteInputDto,
   UpdateDeviceDto,
   UpdateLiveControlSettingsDto,
+  VerifyDeviceDto,
   WebRtcSignalDto,
 } from './dto/remote-support.dto.js';
 import { RemoteSupportService } from './remote-support.service.js';
@@ -72,6 +73,21 @@ export class RemoteSupportController {
       request.user,
       id,
       UpdateDeviceDto.validate(body),
+    );
+    return { device };
+  }
+
+  @Roles('SUPERVISOR', 'ADMIN')
+  @Patch('devices/:id/verify')
+  async verifyDevice(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const device = await this.remoteSupportService.verifyDevice(
+      request.user,
+      id,
+      VerifyDeviceDto.validate(body),
     );
     return { device };
   }

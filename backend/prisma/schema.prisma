@@ -312,7 +312,7 @@ model UserDevice {
   label               String
   rustdeskId          String                   @unique @map("rustdesk_id")
   osName              String?                  @map("os_name")
-  verificationStatus  DeviceVerificationStatus @default(VERIFIED) @map("verification_status")
+  verificationStatus  DeviceVerificationStatus @default(PENDING) @map("verification_status")
   active              Boolean                  @default(true)
   createdAt           DateTime                 @default(now()) @map("created_at")
   updatedAt           DateTime                 @updatedAt @map("updated_at")

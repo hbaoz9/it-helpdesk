@@ -1,5 +1,6 @@
 import { apiRequest } from './client';
 import type {
+  DeviceVerificationStatus,
   LiveSessionStateRecord,
   NotificationRecord,
   RemoteInputEventRecord,
@@ -68,6 +69,23 @@ export async function updateMyDevice(
 ): Promise<UserDeviceRecord> {
   const result = await apiRequest<{ device: UserDeviceRecord }>(
     `/remote-support/devices/my/${id}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.device;
+}
+
+export async function verifyRemoteDevice(
+  deviceId: string,
+  payload: {
+    verificationStatus: DeviceVerificationStatus;
+    reason: string;
+  },
+): Promise<UserDeviceRecord> {
+  const result = await apiRequest<{ device: UserDeviceRecord }>(
+    `/remote-support/devices/${deviceId}/verify`,
     {
       method: 'PATCH',
       body: JSON.stringify(payload),

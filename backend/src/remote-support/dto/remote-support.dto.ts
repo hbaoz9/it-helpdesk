@@ -1,5 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import type { RemoteSessionStatus } from '../../generated/prisma/client.js';
+import type {
+  DeviceVerificationStatus,
+  RemoteSessionStatus,
+} from '../../generated/prisma/client.js';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -12,6 +15,12 @@ const VALID_SESSION_STATUSES: ReadonlyArray<RemoteSessionStatus> = [
   'IN_PROGRESS',
   'COMPLETED',
   'CANCELLED',
+];
+
+const VALID_VERIFICATION_STATUSES: ReadonlyArray<DeviceVerificationStatus> = [
+  'PENDING',
+  'VERIFIED',
+  'REVOKED',
 ];
 
 export type RemoteInputKind =
@@ -158,6 +167,45 @@ export class UpdateDeviceDto {
       throw new BadRequestException('At least one device field must be updated');
     }
 
+    return dto;
+  }
+}
+
+export class VerifyDeviceDto {
+  verificationStatus!: DeviceVerificationStatus;
+  reason!: string;
+
+  static validate(input: unknown): VerifyDeviceDto {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new BadRequestException('Invalid device verification payload');
+    }
+
+    const record = input as Record<string, unknown>;
+    if (
+      typeof record.verificationStatus !== 'string' ||
+      !VALID_VERIFICATION_STATUSES.includes(
+        record.verificationStatus as DeviceVerificationStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        'verificationStatus must be PENDING, VERIFIED, or REVOKED',
+      );
+    }
+
+    if (
+      typeof record.reason !== 'string' ||
+      record.reason.trim().length < 3 ||
+      record.reason.trim().length > 500
+    ) {
+      throw new BadRequestException(
+        'Device verification or revocation requires a reason between 3 and 500 characters',
+      );
+    }
+
+    const dto = new VerifyDeviceDto();
+    dto.verificationStatus =
+      record.verificationStatus as DeviceVerificationStatus;
+    dto.reason = record.reason.trim();
     return dto;
   }
 }

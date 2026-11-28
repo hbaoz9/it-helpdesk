@@ -161,6 +161,7 @@ export interface RustdeskClientConfig {
   approvalTtlMinutes: number;
   clientGuideUrl: string | null;
   enabled: boolean;
+  consentBoundaryNotice?: string;
 }
 
 export interface UserDeviceRecord {
@@ -212,6 +213,7 @@ export interface TicketRemoteSupportContext {
   requesterDevices: UserDeviceRecord[];
   sessions: RemoteSupportSessionRecord[];
   rustdeskConfig: RustdeskClientConfig;
+  consentBoundaryNotice?: string;
 }
 
 export interface NotificationRecord {
