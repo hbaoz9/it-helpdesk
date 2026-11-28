@@ -148,7 +148,10 @@ export class RemoteSupportService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  maskRustdeskId(rustdeskId: string): string {
+  maskRustdeskId(rustdeskId?: string | null): string {
+    if (!rustdeskId) {
+      return '***';
+    }
     const trimmed = rustdeskId.trim();
     if (trimmed.length <= 3) {
       return '***';
@@ -238,7 +241,6 @@ export class RemoteSupportService {
             afterJson: JSON.stringify({
               ownerId: device.ownerId,
               label: device.label,
-              rustdeskId: this.maskRustdeskId(device.rustdeskId),
               osName: device.osName,
               verificationStatus: device.verificationStatus,
               active: device.active,
@@ -314,14 +316,12 @@ export class RemoteSupportService {
             entityId: updated.id,
             beforeJson: JSON.stringify({
               label: existing.label,
-              rustdeskId: this.maskRustdeskId(existing.rustdeskId),
               osName: existing.osName,
               verificationStatus: existing.verificationStatus,
               active: existing.active,
             }),
             afterJson: JSON.stringify({
               label: updated.label,
-              rustdeskId: this.maskRustdeskId(updated.rustdeskId),
               osName: updated.osName,
               verificationStatus: updated.verificationStatus,
               active: updated.active,
@@ -495,12 +495,11 @@ export class RemoteSupportService {
         },
       });
 
-      const maskedId = device ? this.maskRustdeskId(device.rustdeskId) : null;
       const content = dto.remoteSupportRequested
         ? device
-          ? `Người gửi bật yêu cầu Hỗ trợ từ xa · Thiết bị: ${device.label} (ID: ${maskedId}, trạng thái: ${device.verificationStatus})`
-          : 'Người gửi bật yêu cầu Hỗ trợ từ xa'
-        : 'Người gửi tắt yêu cầu Hỗ trợ từ xa';
+          ? `Người gửi bật yêu cầu Hỗ trợ từ xa qua RustDesk · Thiết bị: ${device.label}`
+          : 'Người gửi bật yêu cầu Hỗ trợ từ xa qua RustDesk'
+        : 'Người gửi tắt yêu cầu Hỗ trợ từ xa qua RustDesk';
 
       await tx.ticketActivity.create({
         data: {
@@ -604,15 +603,15 @@ export class RemoteSupportService {
       }
     }
 
-    const maskDeviceForViewer = (
+    const redactDeviceForViewer = (
       dev: UserDeviceSnapshot,
-    ): UserDeviceSnapshot => {
+    ): Omit<UserDeviceSnapshot, 'rustdeskId'> & { rustdeskId: string | null } => {
       if (isOwnerRequester || unlockedDeviceIdsForTech.has(dev.id)) {
         return dev;
       }
       return {
         ...dev,
-        rustdeskId: this.maskRustdeskId(dev.rustdeskId),
+        rustdeskId: null,
       };
     };
 
@@ -623,9 +622,9 @@ export class RemoteSupportService {
       remoteSupportRequested: ticket.remoteSupportRequested,
       preferredDeviceId: ticket.preferredDeviceId,
       preferredDevice: ticket.preferredDevice
-        ? maskDeviceForViewer(ticket.preferredDevice)
+        ? redactDeviceForViewer(ticket.preferredDevice)
         : null,
-      requesterDevices: rawRequesterDevices.map(maskDeviceForViewer),
+      requesterDevices: rawRequesterDevices.map(redactDeviceForViewer),
       sessions: sessions.map((s) => this.toSessionSnapshot(s, user)),
       rustdeskConfig,
       consentBoundaryNotice: SMARTDESK_CONSENT_BOUNDARY_NOTICE,
@@ -707,8 +706,6 @@ export class RemoteSupportService {
       );
     }
 
-    const maskedId = this.maskRustdeskId(device.rustdeskId);
-
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const session = await tx.remoteSupportSession.create({
@@ -722,7 +719,9 @@ export class RemoteSupportService {
             requestedAt: now,
           },
           include: {
-            ticket: { select: { id: true, code: true, title: true } },
+            ticket: {
+              select: { id: true, code: true, title: true, assigneeId: true },
+            },
             device: true,
             requester: { select: { id: true, fullName: true, email: true } },
             technician: { select: { id: true, fullName: true, email: true } },
@@ -738,7 +737,7 @@ export class RemoteSupportService {
             actorId: user.id,
             type: 'COMMENT',
             visibility: 'PUBLIC',
-            content: `[Remote Support] Kỹ thuật viên ${user.fullName} gửi yêu cầu kết nối tới thiết bị "${device.label}" (ID: ${maskedId}). Đang chờ Người gửi chấp thuận${noteSuffix}`,
+            content: `[RustDesk Remote Support] Kỹ thuật viên ${user.fullName} gửi yêu cầu kết nối tới thiết bị "${device.label}". Đang chờ Người gửi chấp thuận${noteSuffix}`,
             createdAt: now,
           },
         });
@@ -749,7 +748,7 @@ export class RemoteSupportService {
             ticketId: ticket.id,
             eventKey: `remote_session:${session.id}:requested`,
             title: `Yêu cầu hỗ trợ từ xa (${ticket.code})`,
-            message: `Kỹ thuật viên ${user.fullName} đề nghị kết nối hỗ trợ từ xa tới thiết bị "${device.label}" (ID: ${maskedId}). Vui lòng mở Ticket để Chấp thuận hoặc Từ chối.`,
+            message: `Kỹ thuật viên ${user.fullName} đề nghị kết nối RustDesk tới thiết bị "${device.label}". Vui lòng mở Ticket để Chấp thuận hoặc Từ chối.`,
             createdAt: now,
           },
         });
@@ -766,7 +765,6 @@ export class RemoteSupportService {
               status: session.status,
               ticketId: session.ticketId,
               deviceId: session.deviceId,
-              maskedRustdeskId: maskedId,
               requesterId: session.requesterId,
               technicianId: session.technicianId,
             }),
@@ -779,7 +777,6 @@ export class RemoteSupportService {
 
       return this.toSessionSnapshot(created, user);
     } catch (error) {
-      // Partial Unique Index violation when two requestSession calls race concurrently
       if (this.isUniqueConstraintError(error)) {
         throw new ConflictException(
           'An active remote support session already exists for this ticket or device',
@@ -836,7 +833,6 @@ export class RemoteSupportService {
     const approvalExpiresAt = new Date(
       now.getTime() + config.approvalTtlMinutes * 60_000,
     );
-    const maskedId = this.maskRustdeskId(existing.device.rustdeskId);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       // Atomic conditional transition: ensures only one concurrent approve/reject/cancel wins
@@ -867,7 +863,7 @@ export class RemoteSupportService {
           approvalExpiresAt,
         },
         include: {
-          ticket: { select: { id: true, code: true, title: true } },
+          ticket: { select: { id: true, code: true, title: true, assigneeId: true } },
           device: true,
           requester: { select: { id: true, fullName: true, email: true } },
           technician: { select: { id: true, fullName: true, email: true } },
@@ -880,7 +876,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[Remote Support] Người gửi ${user.fullName} đã CHẤP THUẬN phiên hỗ trợ từ xa trên thiết bị "${existing.device.label}" (ID: ${maskedId}, hiệu lực ${config.approvalTtlMinutes} phút đến ${approvalExpiresAt.toLocaleTimeString('vi-VN')}). Quyền điều khiển thực tế vẫn do máy đích kiểm soát.`,
+          content: `[Remote Support] Người gửi ${user.fullName} đã CHẤP THUẬN phiên hỗ trợ từ xa trên thiết bị "${existing.device.label}" (hiệu lực ${config.approvalTtlMinutes} phút đến ${approvalExpiresAt.toLocaleTimeString('vi-VN')}). Quyền điều khiển thực tế vẫn do máy đích kiểm soát.`,
           createdAt: now,
         },
       });
@@ -891,7 +887,7 @@ export class RemoteSupportService {
           ticketId: session.ticketId,
           eventKey: `remote_session:${session.id}:approved`,
           title: `Đã chấp thuận hỗ trợ từ xa (${session.ticket.code})`,
-          message: `${user.fullName} đã chấp thuận phiên hỗ trợ từ xa tới thiết bị "${existing.device.label}" (ID: ${maskedId}). Mở chi tiết Ticket để kết nối trong thời hạn ${config.approvalTtlMinutes} phút.`,
+          message: `${user.fullName} đã chấp thuận phiên hỗ trợ từ xa tới thiết bị "${existing.device.label}". Mở chi tiết Ticket để kết nối trong thời hạn ${config.approvalTtlMinutes} phút.`,
           createdAt: now,
         },
       });
@@ -1131,8 +1127,6 @@ export class RemoteSupportService {
       );
     }
 
-    const maskedId = this.maskRustdeskId(existing.device.rustdeskId);
-
     const updated = await this.prisma.$transaction(async (tx) => {
       const transitioned = await tx.remoteSupportSession.updateMany({
         where: {
@@ -1176,7 +1170,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[Remote Support] Kỹ thuật viên ${user.fullName} xác nhận ĐANG HỖ TRỢ TỪ XA (IN_PROGRESS) trên thiết bị "${existing.device.label}" (ID: ${maskedId}).`,
+          content: `[Remote Support] Kỹ thuật viên ${user.fullName} xác nhận ĐANG HỖ TRỢ TỪ XA (IN_PROGRESS) trên thiết bị "${existing.device.label}".`,
           createdAt: now,
         },
       });
@@ -2022,7 +2016,8 @@ export class RemoteSupportService {
     const isAssignedTechnician =
       viewer.roles.includes('TECHNICIAN') &&
       session.technicianId === viewer.id &&
-      session.ticket.assigneeId === viewer.id;
+      (session.ticket.assigneeId === undefined ||
+        session.ticket.assigneeId === viewer.id);
     const canLaunchRustdesk =
       isAssignedTechnician &&
       (session.status === 'APPROVED' || session.status === 'IN_PROGRESS');
@@ -2035,9 +2030,7 @@ export class RemoteSupportService {
       ticketTitle: session.ticket.title,
       deviceId: session.deviceId,
       deviceLabel: session.device.label,
-      rustdeskId: canSeeRawRustdeskId
-        ? session.device.rustdeskId
-        : this.maskRustdeskId(session.device.rustdeskId),
+      rustdeskId: canSeeRawRustdeskId ? session.device.rustdeskId : null,
       deviceOsName: session.device.osName,
       requester: session.requester,
       technician: session.technician,

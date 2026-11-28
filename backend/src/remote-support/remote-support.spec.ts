@@ -386,28 +386,26 @@ describe('RemoteSupportService (RustDesk Consent, Verification, ID Masking, Conc
       }),
     );
 
-    // Raw RustDesk ID and connectUri MUST be masked/hidden for Technician while REQUESTED
+    // Raw RustDesk ID and connectUri MUST be redacted (null) for Technician while REQUESTED
     expect(requested.status).toBe('REQUESTED');
-    expect(requested.rustdeskId).toBe('******475');
+    expect(requested.rustdeskId).toBeNull();
     expect(requested.connectUri).toBeNull();
 
     // TicketActivity and Notification MUST NOT contain raw '102938475'
     const activityArg = mockPrisma.ticketActivity.create.mock.calls[0][0];
-    expect(activityArg.data.content).toContain('******475');
     expect(activityArg.data.content).not.toContain('102938475');
 
     const notifArg = mockPrisma.notification.create.mock.calls[0][0];
-    expect(notifArg.data.message).toContain('******475');
     expect(notifArg.data.message).not.toContain('102938475');
 
-    // getTicketRemoteSupportContext for Technician also masks preferredDevice and requesterDevices while REQUESTED
+    // getTicketRemoteSupportContext for Technician also redacts preferredDevice and requesterDevices while REQUESTED
     const techCtx = await service.getTicketRemoteSupportContext(
       TECH_ASSIGNED,
       TICKET_ID,
     );
-    expect(techCtx.preferredDevice?.rustdeskId).toBe('******475');
-    expect(techCtx.requesterDevices[0]?.rustdeskId).toBe('******475');
-    expect(techCtx.sessions[0]?.rustdeskId).toBe('******475');
+    expect(techCtx.preferredDevice?.rustdeskId).toBeNull();
+    expect(techCtx.requesterDevices[0]?.rustdeskId).toBeNull();
+    expect(techCtx.sessions[0]?.rustdeskId).toBeNull();
 
     // Technician tries to start session while still REQUESTED -> ConflictException
     mockPrisma.remoteSupportSession.findUnique.mockResolvedValue({
@@ -635,7 +633,7 @@ describe('RemoteSupportService (RustDesk Consent, Verification, ID Masking, Conc
     );
 
     expect(completed.status).toBe('COMPLETED');
-    expect(completed.rustdeskId).toBe('******475');
+    expect(completed.rustdeskId).toBeNull();
     expect(completed.connectUri).toBeNull();
     expect(mockPrisma.ticketActivity.create).toHaveBeenCalledTimes(3);
     expect(mockPrisma.auditLog.create).toHaveBeenCalledTimes(3);
