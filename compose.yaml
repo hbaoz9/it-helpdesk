@@ -23,5 +23,36 @@ services:
       timeout: 3s
       retries: 10
 
+  hbbs:
+    image: rustdesk/rustdesk-server:1.1.14
+    profiles:
+      - rustdesk
+    command: hbbs
+    working_dir: /root
+    ports:
+      - "127.0.0.1:21115:21115"
+      - "127.0.0.1:21116:21116"
+      - "127.0.0.1:21116:21116/udp"
+      - "127.0.0.1:21118:21118"
+    volumes:
+      - rustdesk_data:/root
+    depends_on:
+      - hbbr
+    restart: unless-stopped
+
+  hbbr:
+    image: rustdesk/rustdesk-server:1.1.14
+    profiles:
+      - rustdesk
+    command: hbbr
+    working_dir: /root
+    ports:
+      - "127.0.0.1:21117:21117"
+      - "127.0.0.1:21119:21119"
+    volumes:
+      - rustdesk_data:/root
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  rustdesk_data:

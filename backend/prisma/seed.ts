@@ -176,8 +176,22 @@ async function main(): Promise<void> {
       });
     }
 
+    await prisma.rustdeskServerConfig.upsert({
+      where: { singletonKey: 'PRIMARY' },
+      update: {},
+      create: {
+        singletonKey: 'PRIMARY',
+        idServerHost: '127.0.0.1:21116',
+        relayServerHost: '127.0.0.1:21117',
+        publicKey: null,
+        approvalTtlMinutes: 15,
+        clientGuideUrl: 'https://rustdesk.com/docs/en/client/',
+        enabled: false,
+      },
+    });
+
     console.log(
-      'Seed completed successfully: 4 roles, 4 categories, 4 SLA policies, and 4 local test accounts (Argon2id).',
+      'Seed completed successfully: 4 roles, 4 categories, 4 SLA policies, disabled RustDesk config, and 4 local test accounts (Argon2id).',
     );
   } finally {
     await prisma.$disconnect();
