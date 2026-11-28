@@ -15,7 +15,7 @@ CREATE TABLE "user_devices" (
     "label" TEXT NOT NULL,
     "rustdesk_id" TEXT NOT NULL,
     "os_name" TEXT,
-    "verification_status" "DeviceVerificationStatus" NOT NULL DEFAULT 'VERIFIED',
+    "verification_status" "DeviceVerificationStatus" NOT NULL DEFAULT 'PENDING',
     "active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

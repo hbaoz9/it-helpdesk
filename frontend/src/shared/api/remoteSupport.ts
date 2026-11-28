@@ -1,10 +1,16 @@
 import { apiRequest } from './client';
 import type {
+  DeviceVerificationStatus,
+  LiveSessionStateRecord,
   NotificationRecord,
+  RemoteInputEventRecord,
+  RemoteInputKind,
   RemoteSupportSessionRecord,
   RustdeskClientConfig,
   TicketRemoteSupportContext,
   UserDeviceRecord,
+  WebRtcIceCandidateRecord,
+  WebRtcSignalSnapshotRecord,
 } from './types';
 
 export interface CreateDevicePayload {
@@ -63,6 +69,23 @@ export async function updateMyDevice(
 ): Promise<UserDeviceRecord> {
   const result = await apiRequest<{ device: UserDeviceRecord }>(
     `/remote-support/devices/my/${id}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.device;
+}
+
+export async function verifyRemoteDevice(
+  deviceId: string,
+  payload: {
+    verificationStatus: DeviceVerificationStatus;
+    reason: string;
+  },
+): Promise<UserDeviceRecord> {
+  const result = await apiRequest<{ device: UserDeviceRecord }>(
+    `/remote-support/devices/${deviceId}/verify`,
     {
       method: 'PATCH',
       body: JSON.stringify(payload),
@@ -211,4 +234,85 @@ export async function markAllNotificationsRead(): Promise<{
       method: 'PATCH',
     },
   );
+}
+
+export async function getLiveSessionState(
+  sessionId: string,
+  consumeInputs = false,
+): Promise<LiveSessionStateRecord> {
+  const qs = consumeInputs ? '?consumeInputs=true' : '';
+  const result = await apiRequest<{ live: LiveSessionStateRecord }>(
+    `/remote-support/sessions/${sessionId}/live${qs}`,
+  );
+  return result.live;
+}
+
+export async function updateLiveControlSettings(
+  sessionId: string,
+  payload: {
+    streaming?: boolean;
+    remoteControlEnabled?: boolean;
+    executeOnHostOs?: boolean;
+  },
+): Promise<LiveSessionStateRecord> {
+  const result = await apiRequest<{ live: LiveSessionStateRecord }>(
+    `/remote-support/sessions/${sessionId}/live-settings`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.live;
+}
+
+export async function pushLiveFrame(
+  sessionId: string,
+  payload: { frameDataUrl: string; width: number; height: number },
+): Promise<{ ok: true; frameUpdatedAt: number }> {
+  return apiRequest<{ ok: true; frameUpdatedAt: number }>(
+    `/remote-support/sessions/${sessionId}/live-frame`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function sendRemoteInput(
+  sessionId: string,
+  payload: {
+    kind: RemoteInputKind;
+    xRatio?: number;
+    yRatio?: number;
+    key?: string;
+    text?: string;
+  },
+): Promise<{ event: RemoteInputEventRecord }> {
+  return apiRequest<{ event: RemoteInputEventRecord }>(
+    `/remote-support/sessions/${sessionId}/live-input`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function exchangeWebRtcSignal(
+  sessionId: string,
+  payload: {
+    sdpOffer?: { type: 'offer'; sdp: string };
+    sdpAnswer?: { type: 'answer'; sdp: string };
+    iceCandidate?: WebRtcIceCandidateRecord;
+    p2pConnected?: boolean;
+    requestRenegotiate?: boolean;
+  },
+): Promise<WebRtcSignalSnapshotRecord> {
+  const result = await apiRequest<{ webrtc: WebRtcSignalSnapshotRecord }>(
+    `/remote-support/sessions/${sessionId}/webrtc-signal`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+  return result.webrtc;
 }

@@ -9,8 +9,14 @@ import {
   CancelRemoteSessionDto,
   CompleteRemoteSessionDto,
   CreateDeviceDto,
+  PushLiveFrameDto,
   RejectRemoteSessionDto,
   RequestRemoteSessionDto,
+  SendRemoteInputDto,
+  UpdateDeviceDto,
+  UpdateLiveControlSettingsDto,
+  VerifyDeviceDto,
+  WebRtcSignalDto,
 } from './dto/remote-support.dto.js';
 import { RemoteSupportService } from './remote-support.service.js';
 
@@ -66,7 +72,7 @@ const TICKET_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const DEVICE_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const SESSION_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
-describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
+describe('RemoteSupportService (RustDesk Consent, Verification, ID Masking, Concurrency & Audit)', () => {
   let service: RemoteSupportService;
   let mockPrisma: Record<string, any>;
 
@@ -88,6 +94,7 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
       userDevice: {
         findMany: vi.fn(),
         findFirst: vi.fn(),
+        findUnique: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
       },
@@ -101,7 +108,7 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
         findUnique: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
-        updateMany: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         count: vi.fn().mockResolvedValue(0),
       },
       ticketActivity: {
@@ -126,7 +133,7 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
     service = new RemoteSupportService(mockPrisma as unknown as PrismaService);
   });
 
-  it('1. Requester registers a valid RustDesk device and writes an AuditLog', async () => {
+  it('1. Self-declared device registration starts as PENDING (unverified) and resets to PENDING if rustdeskId is changed; Supervisor/Admin can verify ownership', async () => {
     const dto = CreateDeviceDto.validate({
       label: 'Laptop Phòng Kế Toán',
       rustdeskId: '123 456 789',
@@ -135,32 +142,82 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
 
     expect(dto.rustdeskId).toBe('123456789');
 
-    mockPrisma.userDevice.create.mockResolvedValue({
+    mockPrisma.userDevice.create.mockImplementation(async ({ data }: any) => ({
       id: DEVICE_ID,
-      ownerId: REQUESTER_A.id,
-      label: dto.label,
-      rustdeskId: dto.rustdeskId,
-      osName: dto.osName,
-      verificationStatus: 'PENDING',
-      active: true,
-      lastUsedAt: null,
+      ...data,
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    }));
 
     const created = await service.createMyDevice(REQUESTER_A, dto);
     expect(created.rustdeskId).toBe('123456789');
     expect(created.verificationStatus).toBe('PENDING');
-    expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          actorId: REQUESTER_A.id,
-          action: 'DEVICE_REGISTERED',
-          entityType: 'USER_DEVICE',
-          entityId: DEVICE_ID,
+
+    // Technician CANNOT request a remote session on a PENDING (unverified) device
+    mockPrisma.ticket.findFirst.mockResolvedValue({
+      id: TICKET_ID,
+      code: 'INC-2026-0001',
+      title: 'Lỗi phần mềm kế toán',
+      status: 'IN_PROGRESS',
+      requesterId: REQUESTER_A.id,
+      assigneeId: TECH_ASSIGNED.id,
+    });
+    mockPrisma.userDevice.findFirst.mockResolvedValue(created);
+
+    await expect(
+      service.requestSession(
+        TECH_ASSIGNED,
+        TICKET_ID,
+        RequestRemoteSessionDto.validate({ deviceId: DEVICE_ID }),
+      ),
+    ).rejects.toThrow(ConflictException);
+
+    // Requester cannot verify their own device
+    await expect(
+      service.verifyDevice(
+        REQUESTER_A,
+        DEVICE_ID,
+        VerifyDeviceDto.validate({
+          verificationStatus: 'VERIFIED',
+          reason: 'Tự xác minh',
         }),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    // Supervisor verifies device ownership after checking employee asset
+    mockPrisma.userDevice.findUnique.mockResolvedValue(created);
+    mockPrisma.userDevice.update.mockImplementation(async ({ data }: any) => ({
+      ...created,
+      ...data,
+    }));
+
+    const verified = await service.verifyDevice(
+      SUPERVISOR_USER,
+      DEVICE_ID,
+      VerifyDeviceDto.validate({
+        verificationStatus: 'VERIFIED',
+        reason: 'Đã đối chiếu mã tài sản IT-2026-091 với nhân viên',
       }),
     );
+    expect(verified.verificationStatus).toBe('VERIFIED');
+    expect(verified.rustdeskId).toBe('******789');
+
+    // If Requester later changes rustdeskId on a VERIFIED device, it automatically resets to PENDING
+    mockPrisma.userDevice.findFirst.mockResolvedValue({
+      ...created,
+      verificationStatus: 'VERIFIED',
+    });
+    mockPrisma.userDevice.update.mockImplementation(async ({ data }: any) => ({
+      ...created,
+      ...data,
+    }));
+
+    const afterIdChange = await service.updateMyDevice(
+      REQUESTER_A,
+      DEVICE_ID,
+      UpdateDeviceDto.validate({ rustdeskId: '999888777' }),
+    );
+    expect(afterIdChange.verificationStatus).toBe('PENDING');
   });
 
   it('2. Rejects duplicate RustDesk ID with 409 ConflictException', async () => {
@@ -259,17 +316,8 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('4. Consent Gate: Blocks Technician from starting session (IN_PROGRESS) before Requester approves, and hides connectUri while REQUESTED', async () => {
-    mockPrisma.ticket.findFirst.mockResolvedValue({
-      id: TICKET_ID,
-      code: 'INC-2026-0001',
-      title: 'Lỗi VPN',
-      status: 'IN_PROGRESS',
-      requesterId: REQUESTER_A.id,
-      assigneeId: TECH_ASSIGNED.id,
-    });
-
-    mockPrisma.userDevice.findFirst.mockResolvedValue({
+  it('4. Consent Gate & ID Masking: Masks rustdeskId in session snapshot, context, TicketActivity, and Notification before APPROVED, and blocks startSession while REQUESTED', async () => {
+    const verifiedDevice = {
       id: DEVICE_ID,
       ownerId: REQUESTER_A.id,
       label: 'Laptop Requester A',
@@ -277,10 +325,29 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
       osName: 'Windows 11',
       verificationStatus: 'VERIFIED',
       active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    mockPrisma.ticket.findFirst.mockResolvedValue({
+      id: TICKET_ID,
+      code: 'INC-2026-0001',
+      title: 'Lỗi VPN',
+      status: 'IN_PROGRESS',
+      requesterId: REQUESTER_A.id,
+      assigneeId: TECH_ASSIGNED.id,
+      remoteSupportRequested: true,
+      preferredDeviceId: DEVICE_ID,
+      preferredDevice: verifiedDevice,
+      requester: { id: REQUESTER_A.id, fullName: REQUESTER_A.fullName },
+      assignee: { id: TECH_ASSIGNED.id, fullName: TECH_ASSIGNED.fullName },
     });
 
+    mockPrisma.userDevice.findFirst.mockResolvedValue(verifiedDevice);
+    mockPrisma.userDevice.findMany.mockResolvedValue([verifiedDevice]);
     mockPrisma.remoteSupportSession.findFirst.mockResolvedValue(null);
-    mockPrisma.remoteSupportSession.create.mockResolvedValue({
+
+    const requestedSessionRow = {
       id: SESSION_ID,
       ticketId: TICKET_ID,
       deviceId: DEVICE_ID,
@@ -297,16 +364,18 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
       rejectedAt: null,
       startedAt: null,
       endedAt: null,
-      ticket: { id: TICKET_ID, code: 'INC-2026-0001', title: 'Lỗi VPN', assigneeId: TECH_ASSIGNED.id },
-      device: {
-        id: DEVICE_ID,
-        label: 'Laptop Requester A',
-        rustdeskId: '102938475',
-        osName: 'Windows 11',
-      },
+      ticket: { id: TICKET_ID, code: 'INC-2026-0001', title: 'Lỗi VPN' },
+      device: verifiedDevice,
       requester: { id: REQUESTER_A.id, fullName: REQUESTER_A.fullName },
       technician: { id: TECH_ASSIGNED.id, fullName: TECH_ASSIGNED.fullName },
-    });
+    };
+
+    mockPrisma.remoteSupportSession.create.mockResolvedValue(
+      requestedSessionRow,
+    );
+    mockPrisma.remoteSupportSession.findMany.mockResolvedValue([
+      requestedSessionRow,
+    ]);
 
     const requested = await service.requestSession(
       TECH_ASSIGNED,
@@ -317,32 +386,36 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
       }),
     );
 
-    // Connect URI must NOT be exposed before approval
+    // Raw RustDesk ID and connectUri MUST be redacted (null) for Technician while REQUESTED
     expect(requested.status).toBe('REQUESTED');
+    expect(requested.rustdeskId).toBeNull();
     expect(requested.connectUri).toBeNull();
-    expect(mockPrisma.notification.create).toHaveBeenCalledTimes(1);
+
+    // TicketActivity and Notification MUST NOT contain raw '102938475'
+    const activityArg = mockPrisma.ticketActivity.create.mock.calls[0][0];
+    expect(activityArg.data.content).not.toContain('102938475');
+
+    const notifArg = mockPrisma.notification.create.mock.calls[0][0];
+    expect(notifArg.data.message).not.toContain('102938475');
+
+    // getTicketRemoteSupportContext for Technician also redacts preferredDevice and requesterDevices while REQUESTED
+    const techCtx = await service.getTicketRemoteSupportContext(
+      TECH_ASSIGNED,
+      TICKET_ID,
+    );
+    expect(techCtx.preferredDevice?.rustdeskId).toBeNull();
+    expect(techCtx.requesterDevices[0]?.rustdeskId).toBeNull();
+    expect(techCtx.sessions[0]?.rustdeskId).toBeNull();
 
     // Technician tries to start session while still REQUESTED -> ConflictException
     mockPrisma.remoteSupportSession.findUnique.mockResolvedValue({
-      id: SESSION_ID,
-      ticketId: TICKET_ID,
-      deviceId: DEVICE_ID,
-      requesterId: REQUESTER_A.id,
-      technicianId: TECH_ASSIGNED.id,
-      status: 'REQUESTED',
+      ...requestedSessionRow,
       ticket: {
         id: TICKET_ID,
         code: 'INC-2026-0001',
         title: 'Lỗi VPN',
         status: 'IN_PROGRESS',
         assigneeId: TECH_ASSIGNED.id,
-      },
-      device: {
-        id: DEVICE_ID,
-        label: 'Laptop Requester A',
-        rustdeskId: '102938475',
-        active: true,
-        verificationStatus: 'VERIFIED',
       },
     });
 
@@ -387,7 +460,7 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('6. Full lifecycle: REQUESTED -> APPROVED -> IN_PROGRESS -> COMPLETED with connectUri unlocked and AuditLog/TicketActivity recorded', async () => {
+  it('6. Full lifecycle: REQUESTED -> APPROVED -> IN_PROGRESS -> COMPLETED unmasks ID only during APPROVED/IN_PROGRESS and re-masks after COMPLETED', async () => {
     const now = new Date('2026-11-24T12:00:00Z');
     const expiresAt = new Date('2026-11-24T12:15:00Z');
 
@@ -446,7 +519,7 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
     expect(approved.status).toBe('APPROVED');
     expect(approved.approvalExpiresAt).toEqual(expiresAt);
 
-    // Step B: Technician starts session within TTL window
+    // Step B: Technician starts session within TTL window -> unmasked ID & connectUri unlocked
     mockPrisma.remoteSupportSession.findUnique.mockResolvedValueOnce({
       id: SESSION_ID,
       ticketId: TICKET_ID,
@@ -501,10 +574,11 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
 
     const started = await service.startSession(TECH_ASSIGNED, SESSION_ID, now);
     expect(started.status).toBe('IN_PROGRESS');
+    expect(started.rustdeskId).toBe('102938475');
     expect(started.connectUri).toBe('rustdesk://102938475');
     expect(started.cliCommand).toBe('rustdesk --connect 102938475');
 
-    // Step C: Technician completes session with resultSummary
+    // Step C: Technician completes session -> ID and URI are re-masked/locked
     mockPrisma.remoteSupportSession.findUnique.mockResolvedValueOnce({
       id: SESSION_ID,
       ticketId: TICKET_ID,
@@ -559,6 +633,7 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
     );
 
     expect(completed.status).toBe('COMPLETED');
+    expect(completed.rustdeskId).toBeNull();
     expect(completed.connectUri).toBeNull();
     expect(mockPrisma.ticketActivity.create).toHaveBeenCalledTimes(3);
     expect(mockPrisma.auditLog.create).toHaveBeenCalledTimes(3);
@@ -707,5 +782,186 @@ describe('RemoteSupportService (RustDesk Consent, RBAC & Audit)', () => {
       }),
     );
     expect(cancelled.status).toBe('CANCELLED');
+  });
+
+  it('9. In-Browser Live Screen & Web Remote Control: enforces Layer-2 consent before allowing mouse/keyboard commands', async () => {
+    mockPrisma.remoteSupportSession.findUnique.mockResolvedValue({
+      id: SESSION_ID,
+      ticketId: TICKET_ID,
+      requesterId: REQUESTER_A.id,
+      technicianId: TECH_ASSIGNED.id,
+      status: 'IN_PROGRESS',
+      approvalExpiresAt: new Date(Date.now() + 600_000),
+    });
+
+    const frameRes = await service.pushLiveFrame(
+      REQUESTER_A,
+      SESSION_ID,
+      PushLiveFrameDto.validate({
+        frameDataUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+        width: 1280,
+        height: 720,
+      }),
+    );
+    expect(frameRes.ok).toBe(true);
+
+    const laserRes = await service.sendRemoteInput(
+      TECH_ASSIGNED,
+      SESSION_ID,
+      SendRemoteInputDto.validate({
+        kind: 'LASER',
+        xRatio: 0.45,
+        yRatio: 0.6,
+      }),
+    );
+    expect(laserRes.event.kind).toBe('LASER');
+
+    await expect(
+      service.sendRemoteInput(
+        TECH_ASSIGNED,
+        SESSION_ID,
+        SendRemoteInputDto.validate({
+          kind: 'LEFT_CLICK',
+          xRatio: 0.45,
+          yRatio: 0.6,
+        }),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    const liveSettings = await service.updateLiveControlSettings(
+      REQUESTER_A,
+      SESSION_ID,
+      UpdateLiveControlSettingsDto.validate({
+        remoteControlEnabled: true,
+        executeOnHostOs: false,
+      }),
+    );
+    expect(liveSettings.remoteControlEnabled).toBe(true);
+
+    const clickRes = await service.sendRemoteInput(
+      TECH_ASSIGNED,
+      SESSION_ID,
+      SendRemoteInputDto.validate({
+        kind: 'LEFT_CLICK',
+        xRatio: 0.5,
+        yRatio: 0.5,
+      }),
+    );
+    expect(clickRes.event.kind).toBe('LEFT_CLICK');
+  });
+
+  it('10. WebRTC P2P 60 FPS Signaling: exchanges SDP Offer, SDP Answer, and ICE candidates with strict role enforcement', async () => {
+    mockPrisma.remoteSupportSession.findUnique.mockResolvedValue({
+      id: SESSION_ID,
+      ticketId: TICKET_ID,
+      requesterId: REQUESTER_A.id,
+      technicianId: TECH_ASSIGNED.id,
+      status: 'APPROVED',
+      approvalExpiresAt: new Date(Date.now() + 600_000),
+    });
+
+    await expect(
+      service.exchangeWebRtcSignal(
+        TECH_ASSIGNED,
+        SESSION_ID,
+        WebRtcSignalDto.validate({
+          sdpOffer: { type: 'offer', sdp: 'v=0...offer' },
+        }),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    const afterOffer = await service.exchangeWebRtcSignal(
+      REQUESTER_A,
+      SESSION_ID,
+      WebRtcSignalDto.validate({
+        sdpOffer: { type: 'offer', sdp: 'v=0...offer' },
+        iceCandidate: {
+          candidate: 'candidate:1 1 UDP 2122252543 127.0.0.1 54321 typ host',
+          sdpMid: '0',
+          sdpMLineIndex: 0,
+        },
+      }),
+    );
+    expect(afterOffer.offerGeneration).toBe(1);
+    expect(afterOffer.sdpOffer?.sdp).toBe('v=0...offer');
+    expect(afterOffer.requesterIceCandidates).toHaveLength(1);
+
+    const afterAnswer = await service.exchangeWebRtcSignal(
+      TECH_ASSIGNED,
+      SESSION_ID,
+      WebRtcSignalDto.validate({
+        sdpAnswer: { type: 'answer', sdp: 'v=0...answer' },
+        p2pConnected: true,
+      }),
+    );
+    expect(afterAnswer.sdpAnswer?.sdp).toBe('v=0...answer');
+    expect(afterAnswer.p2pConnected).toBe(true);
+  });
+
+  it('11. Concurrency Regression: handles racing requestSession (DB partial unique constraint P2002) and racing approve/start/cancel transitions (conditional updateMany count=0) without duplicate side-effects', async () => {
+    // Case A: Two requestSession calls race past findFirst; the second hits PostgreSQL partial unique index (P2002)
+    mockPrisma.ticket.findFirst.mockResolvedValue({
+      id: TICKET_ID,
+      code: 'INC-2026-0001',
+      title: 'Lỗi VPN',
+      status: 'IN_PROGRESS',
+      requesterId: REQUESTER_A.id,
+      assigneeId: TECH_ASSIGNED.id,
+    });
+    mockPrisma.userDevice.findFirst.mockResolvedValue({
+      id: DEVICE_ID,
+      ownerId: REQUESTER_A.id,
+      label: 'Laptop Requester A',
+      rustdeskId: '102938475',
+      verificationStatus: 'VERIFIED',
+      active: true,
+    });
+    mockPrisma.remoteSupportSession.findFirst.mockResolvedValue(null);
+    mockPrisma.remoteSupportSession.create.mockRejectedValueOnce({
+      code: 'P2002',
+    });
+
+    await expect(
+      service.requestSession(
+        TECH_ASSIGNED,
+        TICKET_ID,
+        RequestRemoteSessionDto.validate({ deviceId: DEVICE_ID }),
+      ),
+    ).rejects.toThrow(ConflictException);
+
+    // Case B: Two concurrent approveSession or rejectSession calls race; the loser gets updateMany({ count: 0 })
+    mockPrisma.remoteSupportSession.findUnique.mockResolvedValue({
+      id: SESSION_ID,
+      ticketId: TICKET_ID,
+      deviceId: DEVICE_ID,
+      requesterId: REQUESTER_A.id,
+      technicianId: TECH_ASSIGNED.id,
+      status: 'REQUESTED',
+      ticket: {
+        id: TICKET_ID,
+        code: 'INC-2026-0001',
+        title: 'Lỗi VPN',
+        status: 'IN_PROGRESS',
+      },
+      device: {
+        id: DEVICE_ID,
+        label: 'Laptop Requester A',
+        rustdeskId: '102938475',
+        active: true,
+        verificationStatus: 'VERIFIED',
+      },
+    });
+    mockPrisma.remoteSupportSession.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
+
+    await expect(
+      service.approveSession(REQUESTER_A, SESSION_ID),
+    ).rejects.toThrow(ConflictException);
+
+    // Must abort before writing any duplicate TicketActivity, Notification, or AuditLog
+    expect(mockPrisma.ticketActivity.create).not.toHaveBeenCalled();
+    expect(mockPrisma.notification.create).not.toHaveBeenCalled();
+    expect(mockPrisma.auditLog.create).not.toHaveBeenCalled();
   });
 });

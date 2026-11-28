@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import type {
   DeviceVerificationStatus,
@@ -19,11 +20,19 @@ import type {
   CreateDeviceDto,
   FlagTicketRemoteSupportDto,
   NotificationsQueryDto,
+  PushLiveFrameDto,
   RejectRemoteSessionDto,
+  RemoteInputKind,
   RemoteSessionsQueryDto,
   RequestRemoteSessionDto,
+  SendRemoteInputDto,
   UpdateDeviceDto,
+  UpdateLiveControlSettingsDto,
+  VerifyDeviceDto,
+  WebRtcIceCandidateInput,
+  WebRtcSignalDto,
 } from './dto/remote-support.dto.js';
+import { Win32InputBridge } from './win32-input-bridge.js';
 
 const ACTIVE_SESSION_STATUSES: RemoteSessionStatus[] = [
   'REQUESTED',
@@ -39,6 +48,9 @@ const OPEN_TICKET_STATUSES: TicketStatus[] = [
   'WAITING_REQUESTER',
 ];
 
+export const SMARTDESK_CONSENT_BOUNDARY_NOTICE =
+  'Phê duyệt trên SmartDesk chỉ điều tiết quy trình ITSM và tạm thời mở khóa định danh kết nối trong hạn TTL; quyền truy cập máy tính thực tế do RustDesk Client / OS Host trên máy đích thực thi (bắt buộc có chấp thuận trực tiếp trên máy đích và xác thực Server Public Key).';
+
 export interface RustdeskClientConfigSnapshot {
   idServerHost: string;
   relayServerHost: string | null;
@@ -46,6 +58,7 @@ export interface RustdeskClientConfigSnapshot {
   approvalTtlMinutes: number;
   clientGuideUrl: string | null;
   enabled: boolean;
+  consentBoundaryNotice?: string;
 }
 
 export interface UserDeviceSnapshot {
@@ -86,9 +99,66 @@ export interface RemoteSessionSnapshot {
   cliCommand: string | null;
 }
 
+export interface RemoteInputEventRecord {
+  id: string;
+  kind: RemoteInputKind;
+  xRatio?: number;
+  yRatio?: number;
+  key?: string;
+  text?: string;
+  actorName: string;
+  executedOnOs: boolean;
+  createdAt: number;
+}
+
+export interface WebRtcSignalSnapshot {
+  offerGeneration: number;
+  sdpOffer: { type: 'offer'; sdp: string } | null;
+  sdpAnswer: { type: 'answer'; sdp: string } | null;
+  requesterIceCandidates: WebRtcIceCandidateInput[];
+  technicianIceCandidates: WebRtcIceCandidateInput[];
+  p2pConnected: boolean;
+  renegotiateRequested: boolean;
+}
+
+export interface LiveSessionStateSnapshot {
+  sessionId: string;
+  streaming: boolean;
+  remoteControlEnabled: boolean;
+  executeOnHostOs: boolean;
+  frameDataUrl: string | null;
+  frameWidth: number;
+  frameHeight: number;
+  frameUpdatedAt: number | null;
+  laserPointer: {
+    xRatio: number;
+    yRatio: number;
+    kind: RemoteInputKind;
+    actorName: string;
+    updatedAt: number;
+  } | null;
+  webrtc: WebRtcSignalSnapshot;
+  recentInputs: RemoteInputEventRecord[];
+  pendingInputs: RemoteInputEventRecord[];
+}
+
 @Injectable()
 export class RemoteSupportService {
+  private readonly liveSessions = new Map<string, LiveSessionStateSnapshot>();
+
   constructor(private readonly prisma: PrismaService) {}
+
+  maskRustdeskId(rustdeskId?: string | null): string {
+    if (!rustdeskId) {
+      return '***';
+    }
+    const trimmed = rustdeskId.trim();
+    if (trimmed.length <= 3) {
+      return '***';
+    }
+    const visibleTail = trimmed.slice(-3);
+    return `${'*'.repeat(Math.max(6, trimmed.length - 3))}${visibleTail}`;
+  }
 
   async getClientConfig(): Promise<RustdeskClientConfigSnapshot> {
     const existing = await this.prisma.rustdeskServerConfig.findUnique({
@@ -103,6 +173,7 @@ export class RemoteSupportService {
         approvalTtlMinutes: existing.approvalTtlMinutes,
         clientGuideUrl: existing.clientGuideUrl,
         enabled: existing.enabled,
+        consentBoundaryNotice: SMARTDESK_CONSENT_BOUNDARY_NOTICE,
       };
     }
 
@@ -125,11 +196,12 @@ export class RemoteSupportService {
       approvalTtlMinutes: created.approvalTtlMinutes,
       clientGuideUrl: created.clientGuideUrl,
       enabled: created.enabled,
+      consentBoundaryNotice: SMARTDESK_CONSENT_BOUNDARY_NOTICE,
     };
   }
 
   /* =========================================================================
-     1. REQUESTER DEVICE MANAGEMENT
+     1. REQUESTER DEVICE SELF-DECLARATION & IT VERIFICATION WORKFLOW
   ========================================================================= */
 
   async listMyDevices(user: AuthenticatedUser): Promise<UserDeviceSnapshot[]> {
@@ -148,6 +220,7 @@ export class RemoteSupportService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        // Self-declared devices MUST start in PENDING status until verified by IT Supervisor/Admin
         const device = await tx.userDevice.create({
           data: {
             ownerId: user.id,
@@ -202,10 +275,11 @@ export class RemoteSupportService {
       throw new NotFoundException('Device not found');
     }
 
+    const rustdeskIdChanged =
+      dto.rustdeskId !== undefined && dto.rustdeskId !== existing.rustdeskId;
+
     if (
-      (dto.active === false ||
-        (dto.rustdeskId !== undefined &&
-          dto.rustdeskId !== existing.rustdeskId)) &&
+      (dto.active === false || rustdeskIdChanged) &&
       (await this.hasActiveSessionForDevice(deviceId))
     ) {
       throw new ConflictException(
@@ -227,6 +301,8 @@ export class RemoteSupportService {
                     : {}),
                 }
               : {}),
+            // Changing RustDesk ID invalidates previous ownership verification and resets to PENDING
+            ...(rustdeskIdChanged ? { verificationStatus: 'PENDING' } : {}),
             ...(dto.osName !== undefined ? { osName: dto.osName } : {}),
             ...(dto.active !== undefined ? { active: dto.active } : {}),
           },
@@ -241,11 +317,13 @@ export class RemoteSupportService {
             beforeJson: JSON.stringify({
               label: existing.label,
               osName: existing.osName,
+              verificationStatus: existing.verificationStatus,
               active: existing.active,
             }),
             afterJson: JSON.stringify({
               label: updated.label,
               osName: updated.osName,
+              verificationStatus: updated.verificationStatus,
               active: updated.active,
             }),
           },
@@ -261,6 +339,100 @@ export class RemoteSupportService {
       }
       throw error;
     }
+  }
+
+  async verifyDevice(
+    actor: AuthenticatedUser,
+    deviceId: string,
+    dto: VerifyDeviceDto,
+    now = new Date(),
+  ): Promise<UserDeviceSnapshot> {
+    if (
+      !actor.roles.includes('SUPERVISOR') &&
+      !actor.roles.includes('ADMIN')
+    ) {
+      throw new ForbiddenException(
+        'Device ownership verification requires SUPERVISOR or ADMIN role',
+      );
+    }
+
+    const existing = await this.prisma.userDevice.findUnique({
+      where: { id: deviceId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Device not found');
+    }
+
+    if (existing.ownerId === actor.id && !actor.roles.includes('ADMIN')) {
+      throw new ForbiddenException(
+        'You cannot self-verify your own personal device',
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const device = await tx.userDevice.update({
+        where: { id: deviceId },
+        data: {
+          verificationStatus: dto.verificationStatus,
+        },
+      });
+
+      // If device is revoked or returned to PENDING, cancel any active sessions on this device
+      if (dto.verificationStatus !== 'VERIFIED') {
+        await tx.remoteSupportSession.updateMany({
+          where: {
+            deviceId: device.id,
+            status: { in: ACTIVE_SESSION_STATUSES },
+          },
+          data: {
+            status: 'CANCELLED',
+            endedAt: now,
+            cancelReason: `Thiết bị chuyển sang trạng thái ${dto.verificationStatus}: ${dto.reason}`,
+          },
+        });
+      }
+
+      await tx.notification.create({
+        data: {
+          userId: device.ownerId,
+          eventKey: `device_verify:${device.id}:${now.getTime()}`,
+          title:
+            dto.verificationStatus === 'VERIFIED'
+              ? `Thiết bị "${device.label}" đã được xác minh`
+              : `Cập nhật trạng thái xác minh thiết bị "${device.label}" (${dto.verificationStatus})`,
+          message: `${actor.fullName} đã cập nhật trạng thái xác minh thiết bị "${device.label}" (ID: ${this.maskRustdeskId(device.rustdeskId)}) sang ${dto.verificationStatus}. Ghi chú: ${dto.reason}`,
+          createdAt: now,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'DEVICE_VERIFICATION_UPDATED',
+          entityType: 'USER_DEVICE',
+          entityId: device.id,
+          reason: dto.reason,
+          beforeJson: JSON.stringify({
+            verificationStatus: existing.verificationStatus,
+          }),
+          afterJson: JSON.stringify({
+            verificationStatus: device.verificationStatus,
+          }),
+          createdAt: now,
+        },
+      });
+
+      return device;
+    });
+
+    return {
+      ...updated,
+      rustdeskId:
+        actor.id === updated.ownerId
+          ? updated.rustdeskId
+          : this.maskRustdeskId(updated.rustdeskId),
+    };
   }
 
   /* =========================================================================
@@ -305,9 +477,9 @@ export class RemoteSupportService {
           'Preferred device does not belong to your account',
         );
       }
-      if (!device.active || device.verificationStatus !== 'VERIFIED') {
+      if (!device.active) {
         throw new ConflictException(
-          'Selected device must be active and verified before requesting remote support',
+          'Selected device must be active before requesting remote support',
         );
       }
     }
@@ -385,24 +557,23 @@ export class RemoteSupportService {
       throw new NotFoundException('Ticket not found');
     }
 
-    const canAccess =
-      (user.roles.includes('SUPERVISOR')) ||
-      (user.roles.includes('REQUESTER') && ticket.requesterId === user.id) ||
-      (user.roles.includes('TECHNICIAN') && ticket.assigneeId === user.id);
+    const isOwnerRequester =
+      user.roles.includes('REQUESTER') && ticket.requesterId === user.id;
+    const isAssignedTechnician =
+      user.roles.includes('TECHNICIAN') && ticket.assigneeId === user.id;
+    const isSupervisor = user.roles.includes('SUPERVISOR');
 
-    if (!canAccess) {
+    if (!isOwnerRequester && !isAssignedTechnician && !isSupervisor) {
       throw new ForbiddenException(
         'You do not have permission to view remote support sessions for this ticket',
       );
     }
 
-    const [requesterDevices, sessions, rustdeskConfig] = await Promise.all([
+    const [rawRequesterDevices, sessions, rustdeskConfig] = await Promise.all([
       this.prisma.userDevice.findMany({
         where: {
           ownerId: ticket.requesterId,
-          ...(user.roles.includes('REQUESTER') && ticket.requesterId === user.id
-            ? {}
-            : { active: true, verificationStatus: 'VERIFIED' }),
+          ...(isOwnerRequester ? {} : { active: true }),
         },
         orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
       }),
@@ -419,9 +590,30 @@ export class RemoteSupportService {
       this.getClientConfig(),
     ]);
 
-    const isOwner = user.roles.includes('REQUESTER') && ticket.requesterId === user.id;
-    const redactDevice = <T extends { rustdeskId: string }>(device: T) =>
-      isOwner ? device : { ...device, rustdeskId: null };
+    // Determine which deviceIds are currently unlocked for this assigned Technician via an APPROVED or IN_PROGRESS session
+    const unlockedDeviceIdsForTech = new Set<string>();
+    if (isAssignedTechnician) {
+      for (const s of sessions) {
+        if (
+          s.technicianId === user.id &&
+          (s.status === 'APPROVED' || s.status === 'IN_PROGRESS')
+        ) {
+          unlockedDeviceIdsForTech.add(s.deviceId);
+        }
+      }
+    }
+
+    const redactDeviceForViewer = (
+      dev: UserDeviceSnapshot,
+    ): Omit<UserDeviceSnapshot, 'rustdeskId'> & { rustdeskId: string | null } => {
+      if (isOwnerRequester || unlockedDeviceIdsForTech.has(dev.id)) {
+        return dev;
+      }
+      return {
+        ...dev,
+        rustdeskId: null,
+      };
+    };
 
     return {
       ticketId: ticket.id,
@@ -430,11 +622,12 @@ export class RemoteSupportService {
       remoteSupportRequested: ticket.remoteSupportRequested,
       preferredDeviceId: ticket.preferredDeviceId,
       preferredDevice: ticket.preferredDevice
-        ? redactDevice(ticket.preferredDevice)
+        ? redactDeviceForViewer(ticket.preferredDevice)
         : null,
-      requesterDevices: requesterDevices.map(redactDevice),
+      requesterDevices: rawRequesterDevices.map(redactDeviceForViewer),
       sessions: sessions.map((s) => this.toSessionSnapshot(s, user)),
       rustdeskConfig,
+      consentBoundaryNotice: SMARTDESK_CONSENT_BOUNDARY_NOTICE,
     };
   }
 
@@ -495,7 +688,7 @@ export class RemoteSupportService {
 
     if (!device.active || device.verificationStatus !== 'VERIFIED') {
       throw new ConflictException(
-        'Selected device is inactive or not verified for remote support',
+        `Selected device is not eligible for remote support (active: ${device.active}, verificationStatus: ${device.verificationStatus}). An IT Supervisor or Administrator must verify device ownership first`,
       );
     }
 
@@ -513,78 +706,84 @@ export class RemoteSupportService {
       );
     }
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const session = await tx.remoteSupportSession.create({
-        data: {
-          ticketId: ticket.id,
-          deviceId: device.id,
-          requesterId: ticket.requesterId,
-          technicianId: user.id,
-          status: 'REQUESTED',
-          requestNote: dto.requestNote ?? null,
-          requestedAt: now,
-        },
-        include: {
-          ticket: { select: { id: true, code: true, title: true } },
-          device: true,
-          requester: { select: { id: true, fullName: true, email: true } },
-          technician: { select: { id: true, fullName: true, email: true } },
-        },
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const session = await tx.remoteSupportSession.create({
+          data: {
+            ticketId: ticket.id,
+            deviceId: device.id,
+            requesterId: ticket.requesterId,
+            technicianId: user.id,
+            status: 'REQUESTED',
+            requestNote: dto.requestNote ?? null,
+            requestedAt: now,
+          },
+          include: {
+            ticket: {
+              select: { id: true, code: true, title: true, assigneeId: true },
+            },
+            device: true,
+            requester: { select: { id: true, fullName: true, email: true } },
+            technician: { select: { id: true, fullName: true, email: true } },
+          },
+        });
+
+        const noteSuffix = dto.requestNote
+          ? ` · Ghi chú: ${dto.requestNote}`
+          : '';
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            actorId: user.id,
+            type: 'COMMENT',
+            visibility: 'PUBLIC',
+            content: `[RustDesk Remote Support] Kỹ thuật viên ${user.fullName} gửi yêu cầu kết nối tới thiết bị "${device.label}". Đang chờ Người gửi chấp thuận${noteSuffix}`,
+            createdAt: now,
+          },
+        });
+
+        await tx.notification.create({
+          data: {
+            userId: ticket.requesterId,
+            ticketId: ticket.id,
+            eventKey: `remote_session:${session.id}:requested`,
+            title: `Yêu cầu hỗ trợ từ xa (${ticket.code})`,
+            message: `Kỹ thuật viên ${user.fullName} đề nghị kết nối RustDesk tới thiết bị "${device.label}". Vui lòng mở Ticket để Chấp thuận hoặc Từ chối.`,
+            createdAt: now,
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorId: user.id,
+            ticketId: ticket.id,
+            action: 'REMOTE_SESSION_REQUESTED',
+            entityType: 'REMOTE_SUPPORT_SESSION',
+            entityId: session.id,
+            reason: dto.requestNote,
+            afterJson: JSON.stringify({
+              status: session.status,
+              ticketId: session.ticketId,
+              deviceId: session.deviceId,
+              requesterId: session.requesterId,
+              technicianId: session.technicianId,
+            }),
+            createdAt: now,
+          },
+        });
+
+        return session;
       });
 
-      const noteSuffix = dto.requestNote ? ` · Ghi chú: ${dto.requestNote}` : '';
-      await tx.ticketActivity.create({
-        data: {
-          ticketId: ticket.id,
-          actorId: user.id,
-          type: 'COMMENT',
-          visibility: 'PUBLIC',
-          content: `[RustDesk Remote Support] Kỹ thuật viên ${user.fullName} gửi yêu cầu kết nối tới thiết bị "${device.label}". Đang chờ Người gửi chấp thuận${noteSuffix}`,
-          createdAt: now,
-        },
-      });
-
-      await tx.notification.create({
-        data: {
-          userId: ticket.requesterId,
-          ticketId: ticket.id,
-          eventKey: `remote_session:${session.id}:requested`,
-          title: `Yêu cầu hỗ trợ từ xa (${ticket.code})`,
-          message: `Kỹ thuật viên ${user.fullName} đề nghị kết nối RustDesk tới thiết bị "${device.label}". Vui lòng mở Ticket để Chấp thuận hoặc Từ chối.`,
-          createdAt: now,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorId: user.id,
-          ticketId: ticket.id,
-          action: 'REMOTE_SESSION_REQUESTED',
-          entityType: 'REMOTE_SUPPORT_SESSION',
-          entityId: session.id,
-          reason: dto.requestNote,
-          afterJson: JSON.stringify({
-            status: session.status,
-            ticketId: session.ticketId,
-            deviceId: session.deviceId,
-            requesterId: session.requesterId,
-            technicianId: session.technicianId,
-          }),
-          createdAt: now,
-        },
-      });
-
-      return session;
-    }).catch((error: unknown) => {
+      return this.toSessionSnapshot(created, user);
+    } catch (error) {
       if (this.isUniqueConstraintError(error)) {
         throw new ConflictException(
           'An active remote support session already exists for this ticket or device',
         );
       }
       throw error;
-    });
-
-    return this.toSessionSnapshot(created, user);
+    }
   }
 
   async approveSession(
@@ -636,6 +835,26 @@ export class RemoteSupportService {
     );
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      // Atomic conditional transition: ensures only one concurrent approve/reject/cancel wins
+      const transitioned = await tx.remoteSupportSession.updateMany({
+        where: {
+          id: sessionId,
+          requesterId: user.id,
+          status: 'REQUESTED',
+        },
+        data: {
+          status: 'APPROVED',
+          approvedAt: now,
+          approvalExpiresAt,
+        },
+      });
+
+      if (transitioned.count !== 1) {
+        throw new ConflictException(
+          'Session state changed concurrently. Please reload and try again',
+        );
+      }
+
       const session = await tx.remoteSupportSession.update({
         where: { id: sessionId, status: 'REQUESTED' },
         data: {
@@ -644,7 +863,7 @@ export class RemoteSupportService {
           approvalExpiresAt,
         },
         include: {
-          ticket: { select: { id: true, code: true, title: true } },
+          ticket: { select: { id: true, code: true, title: true, assigneeId: true } },
           device: true,
           requester: { select: { id: true, fullName: true, email: true } },
           technician: { select: { id: true, fullName: true, email: true } },
@@ -657,7 +876,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[RustDesk Remote Support] Người gửi ${user.fullName} đã CHẤP THUẬN phiên hỗ trợ từ xa trên thiết bị "${existing.device.label}" (Hiệu lực chấp thuận ${config.approvalTtlMinutes} phút đến ${approvalExpiresAt.toLocaleTimeString('vi-VN')}).`,
+          content: `[Remote Support] Người gửi ${user.fullName} đã CHẤP THUẬN phiên hỗ trợ từ xa trên thiết bị "${existing.device.label}" (hiệu lực ${config.approvalTtlMinutes} phút đến ${approvalExpiresAt.toLocaleTimeString('vi-VN')}). Quyền điều khiển thực tế vẫn do máy đích kiểm soát.`,
           createdAt: now,
         },
       });
@@ -667,8 +886,8 @@ export class RemoteSupportService {
           userId: session.technicianId,
           ticketId: session.ticketId,
           eventKey: `remote_session:${session.id}:approved`,
-          title: `Đã chấp thuận kết nối RustDesk (${session.ticket.code})`,
-          message: `${user.fullName} đã chấp thuận kết nối RustDesk tới thiết bị "${existing.device.label}". Hiệu lực ${config.approvalTtlMinutes} phút.`,
+          title: `Đã chấp thuận hỗ trợ từ xa (${session.ticket.code})`,
+          message: `${user.fullName} đã chấp thuận phiên hỗ trợ từ xa tới thiết bị "${existing.device.label}". Mở chi tiết Ticket để kết nối trong thời hạn ${config.approvalTtlMinutes} phút.`,
           createdAt: now,
         },
       });
@@ -729,6 +948,26 @@ export class RemoteSupportService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const transitioned = await tx.remoteSupportSession.updateMany({
+        where: {
+          id: sessionId,
+          requesterId: user.id,
+          status: 'REQUESTED',
+        },
+        data: {
+          status: 'REJECTED',
+          rejectedAt: now,
+          endedAt: now,
+          rejectionReason: dto.reason ?? null,
+        },
+      });
+
+      if (transitioned.count !== 1) {
+        throw new ConflictException(
+          'Session state changed concurrently. Please reload and try again',
+        );
+      }
+
       const session = await tx.remoteSupportSession.update({
         where: { id: sessionId, status: 'REQUESTED' },
         data: {
@@ -752,7 +991,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[RustDesk Remote Support] Người gửi ${user.fullName} đã TỪ CHỐI yêu cầu hỗ trợ từ xa${reasonSuffix}`,
+          content: `[Remote Support] Người gửi ${user.fullName} đã TỪ CHỐI yêu cầu hỗ trợ từ xa${reasonSuffix}`,
           createdAt: now,
         },
       });
@@ -762,8 +1001,8 @@ export class RemoteSupportService {
           userId: session.technicianId,
           ticketId: session.ticketId,
           eventKey: `remote_session:${session.id}:rejected`,
-          title: `Từ chối kết nối RustDesk (${session.ticket.code})`,
-          message: `${user.fullName} đã từ chối yêu cầu kết nối RustDesk${reasonSuffix}.`,
+          title: `Từ chối hỗ trợ từ xa (${session.ticket.code})`,
+          message: `${user.fullName} đã từ chối yêu cầu hỗ trợ từ xa${reasonSuffix}.`,
           createdAt: now,
         },
       });
@@ -839,6 +1078,15 @@ export class RemoteSupportService {
 
     if (existing.approvalExpiresAt && existing.approvalExpiresAt <= now) {
       await this.prisma.$transaction(async (tx) => {
+        const expiredUpdate = await tx.remoteSupportSession.updateMany({
+          where: { id: sessionId, status: 'APPROVED' },
+          data: {
+            status: 'CANCELLED',
+            cancelReason: 'Thời hạn chấp thuận đã hết hạn (Approval TTL expired)',
+            endedAt: now,
+          },
+        });
+
         await tx.remoteSupportSession.update({
           where: { id: sessionId, status: 'APPROVED' },
           data: {
@@ -848,19 +1096,21 @@ export class RemoteSupportService {
           },
         });
 
-        await tx.auditLog.create({
-          data: {
-            actorId: user.id,
-            ticketId: existing.ticketId,
-            action: 'REMOTE_SESSION_EXPIRED',
-            entityType: 'REMOTE_SUPPORT_SESSION',
-            entityId: existing.id,
-            reason: 'Approval TTL expired before session start',
-            beforeJson: JSON.stringify({ status: 'APPROVED' }),
-            afterJson: JSON.stringify({ status: 'CANCELLED' }),
-            createdAt: now,
-          },
-        });
+        if (expiredUpdate.count === 1) {
+          await tx.auditLog.create({
+            data: {
+              actorId: user.id,
+              ticketId: existing.ticketId,
+              action: 'REMOTE_SESSION_EXPIRED',
+              entityType: 'REMOTE_SUPPORT_SESSION',
+              entityId: existing.id,
+              reason: 'Approval TTL expired before session start',
+              beforeJson: JSON.stringify({ status: 'APPROVED' }),
+              afterJson: JSON.stringify({ status: 'CANCELLED' }),
+              createdAt: now,
+            },
+          });
+        }
       });
 
       throw new ConflictException(
@@ -878,6 +1128,28 @@ export class RemoteSupportService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const transitioned = await tx.remoteSupportSession.updateMany({
+        where: {
+          id: sessionId,
+          technicianId: user.id,
+          status: 'APPROVED',
+          OR: [
+            { approvalExpiresAt: null },
+            { approvalExpiresAt: { gt: now } },
+          ],
+        },
+        data: {
+          status: 'IN_PROGRESS',
+          startedAt: now,
+        },
+      });
+
+      if (transitioned.count !== 1) {
+        throw new ConflictException(
+          'Session state changed concurrently or approval expired. Please reload and try again',
+        );
+      }
+
       const session = await tx.remoteSupportSession.update({
         where: { id: sessionId, status: 'APPROVED', approvalExpiresAt: { gt: now } },
         data: {
@@ -898,7 +1170,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[RustDesk Remote Support] Kỹ thuật viên ${user.fullName} xác nhận ĐANG HỖ TRỢ TỪ XA (IN_PROGRESS) trên thiết bị "${existing.device.label}".`,
+          content: `[Remote Support] Kỹ thuật viên ${user.fullName} xác nhận ĐANG HỖ TRỢ TỪ XA (IN_PROGRESS) trên thiết bị "${existing.device.label}".`,
           createdAt: now,
         },
       });
@@ -963,6 +1235,24 @@ export class RemoteSupportService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const transitioned = await tx.remoteSupportSession.updateMany({
+        where: {
+          id: sessionId,
+          status: 'IN_PROGRESS',
+        },
+        data: {
+          status: 'COMPLETED',
+          endedAt: now,
+          resultSummary: dto.resultSummary,
+        },
+      });
+
+      if (transitioned.count !== 1) {
+        throw new ConflictException(
+          'Session state changed concurrently. Please reload and try again',
+        );
+      }
+
       const session = await tx.remoteSupportSession.update({
         where: { id: sessionId, status: 'IN_PROGRESS' },
         data: {
@@ -984,7 +1274,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[RustDesk Remote Support] Hoàn tất phiên hỗ trợ từ xa trên thiết bị "${existing.device.label}" · Kết quả: ${dto.resultSummary}`,
+          content: `[Remote Support] Hoàn tất phiên hỗ trợ từ xa trên thiết bị "${existing.device.label}" · Kết quả: ${dto.resultSummary}`,
           createdAt: now,
         },
       });
@@ -999,7 +1289,7 @@ export class RemoteSupportService {
           ticketId: session.ticketId,
           eventKey: `remote_session:${session.id}:completed`,
           title: `Hoàn tất phiên hỗ trợ từ xa (${session.ticket.code})`,
-          message: `Phiên hỗ trợ RustDesk trên thiết bị "${existing.device.label}" đã kết thúc. Kết quả: ${dto.resultSummary}`,
+          message: `Phiên hỗ trợ từ xa trên thiết bị "${existing.device.label}" đã kết thúc. Kết quả: ${dto.resultSummary}`,
           createdAt: now,
         },
       });
@@ -1025,6 +1315,7 @@ export class RemoteSupportService {
       return session;
     }).catch((error: unknown) => this.rethrowTransitionConflict(error));
 
+    this.liveSessions.delete(sessionId);
     return this.toSessionSnapshot(updated, user);
   }
 
@@ -1084,6 +1375,24 @@ export class RemoteSupportService {
         : 'Kỹ thuật viên hủy yêu cầu hỗ trợ từ xa');
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const transitioned = await tx.remoteSupportSession.updateMany({
+        where: {
+          id: sessionId,
+          status: { in: ACTIVE_SESSION_STATUSES },
+        },
+        data: {
+          status: 'CANCELLED',
+          endedAt: now,
+          cancelReason,
+        },
+      });
+
+      if (transitioned.count !== 1) {
+        throw new ConflictException(
+          'Session state changed concurrently. Please reload and try again',
+        );
+      }
+
       const session = await tx.remoteSupportSession.update({
         where: { id: sessionId, status: { in: ACTIVE_SESSION_STATUSES } },
         data: {
@@ -1105,7 +1414,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[RustDesk Remote Support] Phiên hỗ trợ từ xa đã bị HỦY bởi ${user.fullName} (Từ trạng thái ${existing.status}) · Lý do: ${cancelReason}`,
+          content: `[Remote Support] Phiên hỗ trợ từ xa đã bị HỦY bởi ${user.fullName} (Từ trạng thái ${existing.status}) · Lý do: ${cancelReason}`,
           createdAt: now,
         },
       });
@@ -1123,7 +1432,7 @@ export class RemoteSupportService {
             ticketId: session.ticketId,
             eventKey: `remote_session:${session.id}:cancelled:${recipientId}`,
             title: `Phiên hỗ trợ từ xa đã hủy (${session.ticket.code})`,
-            message: `${user.fullName} đã hủy phiên hỗ trợ RustDesk trên thiết bị "${existing.device.label}". Lý do: ${cancelReason}`,
+            message: `${user.fullName} đã hủy phiên hỗ trợ từ xa trên thiết bị "${existing.device.label}". Lý do: ${cancelReason}`,
             createdAt: now,
           },
         });
@@ -1150,7 +1459,354 @@ export class RemoteSupportService {
       return session;
     }).catch((error: unknown) => this.rethrowTransitionConflict(error));
 
+    this.liveSessions.delete(sessionId);
     return this.toSessionSnapshot(updated, user);
+  }
+
+  /* =========================================================================
+     2B. IN-BROWSER LIVE SCREEN STREAMING, LASER POINTER & WEB-TO-OS CONTROL
+  ========================================================================= */
+
+  async getLiveSessionState(
+    user: AuthenticatedUser,
+    sessionId: string,
+    consumeInputs = false,
+  ): Promise<LiveSessionStateSnapshot> {
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+    const state = this.getOrCreateLiveState(session.id);
+
+    if (
+      state.laserPointer &&
+      Date.now() - state.laserPointer.updatedAt > 8_000
+    ) {
+      state.laserPointer = null;
+    }
+
+    const isOwnerRequester =
+      user.roles.includes('REQUESTER') && session.requesterId === user.id;
+
+    let pendingInputs: RemoteInputEventRecord[] = [];
+    if (isOwnerRequester && consumeInputs && state.pendingInputs.length > 0) {
+      pendingInputs = [...state.pendingInputs];
+      state.pendingInputs = [];
+    } else if (isOwnerRequester) {
+      pendingInputs = state.pendingInputs;
+    }
+
+    return {
+      ...state,
+      pendingInputs,
+    };
+  }
+
+  async updateLiveControlSettings(
+    user: AuthenticatedUser,
+    sessionId: string,
+    dto: UpdateLiveControlSettingsDto,
+  ): Promise<LiveSessionStateSnapshot> {
+    this.requireRequester(user);
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+
+    if (session.requesterId !== user.id) {
+      throw new ForbiddenException(
+        'Only the ticket Requester can grant or revoke live screen & OS control permissions',
+      );
+    }
+
+    const state = this.getOrCreateLiveState(session.id);
+    const previousControl = state.remoteControlEnabled;
+
+    if (dto.streaming !== undefined) {
+      state.streaming = dto.streaming;
+      if (!dto.streaming) {
+        state.frameDataUrl = null;
+        state.frameUpdatedAt = null;
+        state.webrtc = {
+          offerGeneration: state.webrtc.offerGeneration + 1,
+          sdpOffer: null,
+          sdpAnswer: null,
+          requesterIceCandidates: [],
+          technicianIceCandidates: [],
+          p2pConnected: false,
+          renegotiateRequested: false,
+        };
+      }
+    }
+
+    if (dto.remoteControlEnabled !== undefined) {
+      state.remoteControlEnabled = dto.remoteControlEnabled;
+      if (!dto.remoteControlEnabled) {
+        state.pendingInputs = [];
+      }
+    }
+
+    if (dto.executeOnHostOs !== undefined) {
+      state.executeOnHostOs = dto.executeOnHostOs;
+    }
+
+    if (
+      dto.remoteControlEnabled !== undefined &&
+      dto.remoteControlEnabled !== previousControl
+    ) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          ticketId: session.ticketId,
+          action: dto.remoteControlEnabled
+            ? 'REMOTE_WEB_CONTROL_GRANTED'
+            : 'REMOTE_WEB_CONTROL_REVOKED',
+          entityType: 'REMOTE_SUPPORT_SESSION',
+          entityId: session.id,
+          beforeJson: JSON.stringify({
+            remoteControlEnabled: previousControl,
+          }),
+          afterJson: JSON.stringify({
+            remoteControlEnabled: state.remoteControlEnabled,
+            executeOnHostOs: state.executeOnHostOs,
+          }),
+        },
+      });
+    }
+
+    return state;
+  }
+
+  async pushLiveFrame(
+    user: AuthenticatedUser,
+    sessionId: string,
+    dto: PushLiveFrameDto,
+  ): Promise<{ ok: true; frameUpdatedAt: number }> {
+    this.requireRequester(user);
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+
+    if (session.requesterId !== user.id) {
+      throw new ForbiddenException(
+        'Only the ticket Requester can stream their screen to this session',
+      );
+    }
+
+    const state = this.getOrCreateLiveState(session.id);
+    const nowMs = Date.now();
+    state.streaming = true;
+    state.frameDataUrl = dto.frameDataUrl;
+    state.frameWidth = dto.width;
+    state.frameHeight = dto.height;
+    state.frameUpdatedAt = nowMs;
+
+    return { ok: true, frameUpdatedAt: nowMs };
+  }
+
+  async sendRemoteInput(
+    user: AuthenticatedUser,
+    sessionId: string,
+    dto: SendRemoteInputDto,
+  ): Promise<{ event: RemoteInputEventRecord }> {
+    this.requireTechnician(user);
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+
+    if (session.technicianId !== user.id) {
+      throw new ForbiddenException(
+        'Only the assigned Technician of this session can send remote interaction events',
+      );
+    }
+
+    const state = this.getOrCreateLiveState(session.id);
+    const nowMs = Date.now();
+
+    if (dto.kind !== 'LASER' && !state.remoteControlEnabled) {
+      throw new ForbiddenException(
+        'Người gửi chưa bật công tắc "Cho phép Điều khiển Chuột & Bàn phím" trên phiên này (Chỉ có thể dùng Tia Laser chỉ dẫn)',
+      );
+    }
+
+    if (dto.xRatio !== undefined && dto.yRatio !== undefined) {
+      state.laserPointer = {
+        xRatio: dto.xRatio,
+        yRatio: dto.yRatio,
+        kind: dto.kind,
+        actorName: user.fullName,
+        updatedAt: nowMs,
+      };
+    }
+
+    let executedOnOs = false;
+    if (
+      dto.kind !== 'LASER' &&
+      state.remoteControlEnabled &&
+      state.executeOnHostOs
+    ) {
+      executedOnOs = Win32InputBridge.execute({
+        kind: dto.kind,
+        xRatio: dto.xRatio,
+        yRatio: dto.yRatio,
+        key: dto.key,
+        text: dto.text,
+      });
+    }
+
+    const eventRecord: RemoteInputEventRecord = {
+      id: randomUUID(),
+      kind: dto.kind,
+      xRatio: dto.xRatio,
+      yRatio: dto.yRatio,
+      key: dto.key,
+      text: dto.text,
+      actorName: user.fullName,
+      executedOnOs,
+      createdAt: nowMs,
+    };
+
+    if (dto.kind !== 'LASER') {
+      state.recentInputs = [eventRecord, ...state.recentInputs].slice(0, 15);
+      if (!executedOnOs) {
+        state.pendingInputs = [...state.pendingInputs, eventRecord].slice(-30);
+      }
+    }
+
+    return { event: eventRecord };
+  }
+
+  async exchangeWebRtcSignal(
+    user: AuthenticatedUser,
+    sessionId: string,
+    dto: WebRtcSignalDto,
+  ): Promise<WebRtcSignalSnapshot> {
+    const session = await this.assertLiveSessionAccess(user, sessionId);
+    const state = this.getOrCreateLiveState(session.id);
+
+    const isOwnerRequester =
+      user.roles.includes('REQUESTER') && session.requesterId === user.id;
+    const isOwnerTechnician =
+      user.roles.includes('TECHNICIAN') && session.technicianId === user.id;
+
+    if (!isOwnerRequester && !isOwnerTechnician) {
+      throw new ForbiddenException(
+        'Only the session Requester or assigned Technician can exchange WebRTC signaling',
+      );
+    }
+
+    if (dto.sdpOffer) {
+      if (!isOwnerRequester) {
+        throw new ForbiddenException(
+          'Only the screen-sharing Requester can publish a WebRTC SDP Offer',
+        );
+      }
+      state.streaming = true;
+      state.webrtc = {
+        offerGeneration: state.webrtc.offerGeneration + 1,
+        sdpOffer: dto.sdpOffer,
+        sdpAnswer: null,
+        requesterIceCandidates: [],
+        technicianIceCandidates: [],
+        p2pConnected: false,
+        renegotiateRequested: false,
+      };
+    }
+
+    if (dto.sdpAnswer) {
+      if (!isOwnerTechnician) {
+        throw new ForbiddenException(
+          'Only the assigned Technician can publish a WebRTC SDP Answer',
+        );
+      }
+      state.webrtc.sdpAnswer = dto.sdpAnswer;
+    }
+
+    if (dto.iceCandidate) {
+      if (isOwnerRequester) {
+        state.webrtc.requesterIceCandidates = [
+          ...state.webrtc.requesterIceCandidates,
+          dto.iceCandidate,
+        ].slice(-40);
+      } else if (isOwnerTechnician) {
+        state.webrtc.technicianIceCandidates = [
+          ...state.webrtc.technicianIceCandidates,
+          dto.iceCandidate,
+        ].slice(-40);
+      }
+    }
+
+    if (dto.p2pConnected !== undefined) {
+      state.webrtc.p2pConnected = dto.p2pConnected;
+    }
+
+    if (dto.requestRenegotiate && isOwnerTechnician) {
+      state.webrtc.renegotiateRequested = true;
+    }
+
+    return state.webrtc;
+  }
+
+  private getOrCreateLiveState(sessionId: string): LiveSessionStateSnapshot {
+    const existing = this.liveSessions.get(sessionId);
+    if (existing) {
+      return existing;
+    }
+
+    const initial: LiveSessionStateSnapshot = {
+      sessionId,
+      streaming: false,
+      remoteControlEnabled: false,
+      executeOnHostOs: true,
+      frameDataUrl: null,
+      frameWidth: 1280,
+      frameHeight: 720,
+      frameUpdatedAt: null,
+      laserPointer: null,
+      webrtc: {
+        offerGeneration: 0,
+        sdpOffer: null,
+        sdpAnswer: null,
+        requesterIceCandidates: [],
+        technicianIceCandidates: [],
+        p2pConnected: false,
+        renegotiateRequested: false,
+      },
+      recentInputs: [],
+      pendingInputs: [],
+    };
+    this.liveSessions.set(sessionId, initial);
+    return initial;
+  }
+
+  private async assertLiveSessionAccess(
+    user: AuthenticatedUser,
+    sessionId: string,
+  ) {
+    const session = await this.prisma.remoteSupportSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        ticketId: true,
+        requesterId: true,
+        technicianId: true,
+        status: true,
+        approvalExpiresAt: true,
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Remote support session not found');
+    }
+
+    const canAccess =
+      user.roles.includes('SUPERVISOR') ||
+      (user.roles.includes('REQUESTER') && session.requesterId === user.id) ||
+      (user.roles.includes('TECHNICIAN') && session.technicianId === user.id);
+
+    if (!canAccess) {
+      throw new ForbiddenException(
+        'You do not have access to this live remote support session',
+      );
+    }
+
+    if (session.status !== 'APPROVED' && session.status !== 'IN_PROGRESS') {
+      throw new ConflictException(
+        `Live web remote session is only available when status is APPROVED or IN_PROGRESS (current: ${session.status})`,
+      );
+    }
+
+    return session;
   }
 
   async listSessions(
@@ -1304,6 +1960,7 @@ export class RemoteSupportService {
           endedAt: now,
         },
       });
+      this.liveSessions.delete(item.id);
     }
   }
 
@@ -1354,16 +2011,17 @@ export class RemoteSupportService {
     },
     viewer: AuthenticatedUser,
   ): RemoteSessionSnapshot {
+    const isOwnerRequester =
+      viewer.roles.includes('REQUESTER') && session.requesterId === viewer.id;
     const isAssignedTechnician =
       viewer.roles.includes('TECHNICIAN') &&
       session.technicianId === viewer.id &&
-      session.ticket.assigneeId === viewer.id;
+      (session.ticket.assigneeId === undefined ||
+        session.ticket.assigneeId === viewer.id);
     const canLaunchRustdesk =
       isAssignedTechnician &&
       (session.status === 'APPROVED' || session.status === 'IN_PROGRESS');
-    const canSeeId =
-      (viewer.roles.includes('REQUESTER') && session.requesterId === viewer.id) ||
-      canLaunchRustdesk;
+    const canSeeRawRustdeskId = isOwnerRequester || canLaunchRustdesk;
 
     return {
       id: session.id,
@@ -1372,7 +2030,7 @@ export class RemoteSupportService {
       ticketTitle: session.ticket.title,
       deviceId: session.deviceId,
       deviceLabel: session.device.label,
-      rustdeskId: canSeeId ? session.device.rustdeskId : null,
+      rustdeskId: canSeeRawRustdeskId ? session.device.rustdeskId : null,
       deviceOsName: session.device.osName,
       requester: session.requester,
       technician: session.technician,

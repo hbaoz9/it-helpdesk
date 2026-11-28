@@ -71,14 +71,14 @@ export default function AppRouter() {
       <Route path="users" element={<AdminHomePage />} />
       <Route path="categories" element={<AdminHomePage />} />
       <Route path="sla" element={<AdminHomePage />} />
+      <Route path="rustdesk" element={<AdminHomePage />} />
+      <Route path="audit" element={<AdminHomePage />} />
       <Route path="assets/dashboard" element={<AssetDashboardPage />} />
       <Route path="assets" element={<AssetInventoryPage />} />
       <Route path="assets/assignments" element={<AssetAssignmentsPage />} />
       <Route path="asset-maintenance" element={<AssetMaintenancePage />} />
       <Route path="asset-history" element={<AssetHistoryPage />} />
       <Route path="asset-categories" element={<AssetCategoriesPage />} />
-      <Route path="rustdesk" element={<AdminHomePage />} />
-      <Route path="audit" element={<AdminHomePage />} />
     </Route>
     <Route path="*" element={<EntryRoute />} />
   </Routes></BrowserRouter>;

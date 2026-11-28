@@ -159,6 +159,7 @@ export default function TicketDetailPage() {
               <Descriptions.Item label="Trạng thái">{ticket.asset.status.replaceAll('_', ' ')}</Descriptions.Item>
             </Descriptions>
           </section>}
+
           <div style={{ marginBottom: 16 }}>
             <TicketRemoteSupportPanel
               ticketId={ticket.id}

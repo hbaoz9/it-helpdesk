@@ -39,6 +39,7 @@ import {
   rejectRemoteSession,
   requestRemoteSession,
   startRemoteSession,
+  verifyRemoteDevice,
 } from '../../shared/api/remoteSupport';
 import type {
   RemoteSessionStatus,
@@ -46,6 +47,7 @@ import type {
   TicketRemoteSupportContext,
   TicketStatus,
 } from '../../shared/api/types';
+import WebLiveRemoteConsole from './WebLiveRemoteConsole';
 
 const SESSION_STATUS_META: Record<
   RemoteSessionStatus,
@@ -96,8 +98,11 @@ export default function TicketRemoteSupportPanel({
   const [requestNote, setRequestNote] = useState('');
   const [resultSummary, setResultSummary] = useState('');
 
-  // Supervisor / Cancel form state
+  // Supervisor / Cancel & Device Verification form state
   const [cancelReason, setCancelReason] = useState('');
+  const [verifyNote, setVerifyNote] = useState(
+    'Đã đối chiếu mã tài sản & xác nhận quyền sở hữu thiết bị với Người gửi',
+  );
 
   const [deviceForm] = Form.useForm<{
     label: string;
@@ -237,6 +242,16 @@ export default function TicketRemoteSupportPanel({
       {contextHolder}
 
       <Space direction="vertical" size={14} style={{ width: '100%' }}>
+        <Alert
+          type="info"
+          showIcon
+          message="Phạm vi điều phối & Giới hạn bảo mật thực tế (Workflow vs. Host Enforcement)"
+          description={
+            ctx.consentBoundaryNotice ??
+            'Phê duyệt trên SmartDesk chỉ điều tiết quy trình ITSM và tạm thời mở khóa định danh thiết nối (được che dạng ****** khi chưa phê duyệt); quyền truy cập máy tính thực tế vẫn do RustDesk Client / OS Host trên máy đích thực thi (bắt buộc có chấp thuận thật trên máy đích và xác thực Server Public Key).'
+          }
+        />
+
         {!ctx.rustdeskConfig.enabled && (
           <Alert
             type="warning"
@@ -297,6 +312,16 @@ export default function TicketRemoteSupportPanel({
                 </Descriptions.Item>
               )}
             </Descriptions>
+
+            {/* KHUNG MÀN HÌNH LIVE TRỰC TIẾP TRÊN WEB & ĐIỀU KHIỂN CHUỘT/PHÍM (KHÔNG CẦN APP RUSTDESK) */}
+            {(activeSession.status === 'APPROVED' ||
+              activeSession.status === 'IN_PROGRESS') && (
+              <WebLiveRemoteConsole
+                sessionId={activeSession.id}
+                mode={mode}
+                deviceLabel={activeSession.deviceLabel}
+              />
+            )}
 
             {/* REQUESTER: CHẤP THUẬN / TỪ CHỐI / NGẮT KẾT NỐI */}
             {mode === 'requester' && activeSession.status === 'REQUESTED' && (
@@ -654,19 +679,21 @@ export default function TicketRemoteSupportPanel({
               <Space wrap>
                 <Select
                   style={{ minWidth: 280 }}
-                  placeholder="Chọn thiết bị RustDesk của bạn..."
+                  placeholder="Chọn thiết bị của bạn..."
                   value={selectedDeviceId || undefined}
                   onChange={setSelectedDeviceId}
                   options={ctx.requesterDevices.map((d) => ({
                     value: d.id,
-                    disabled: !d.active || d.verificationStatus !== 'VERIFIED',
+                    disabled: !d.active,
                     label: `${d.label} — ID: ${d.rustdeskId}${
                       d.osName ? ` (${d.osName})` : ''
-                    }${
-                      d.verificationStatus !== 'VERIFIED'
-                        ? ` [${d.verificationStatus}]`
-                        : ''
-                    }`,
+                    } [${
+                      d.verificationStatus === 'VERIFIED'
+                        ? 'VERIFIED: Đã xác minh'
+                        : d.verificationStatus === 'PENDING'
+                          ? 'PENDING: Tự khai báo - Chờ IT xác minh'
+                          : 'REVOKED: Đã thu hồi'
+                    }]`,
                   }))}
                 />
                 <Switch
@@ -790,6 +817,116 @@ export default function TicketRemoteSupportPanel({
             </div>
           )}
 
+        {/* 3B. SUPERVISOR: XÁC MINH QUYỀN SỞ HỮU THIẾT BỊ TỰ KHAI BÁO (PENDING -> VERIFIED / REVOKED) */}
+        {mode === 'supervisor' && ctx.requesterDevices.length > 0 && (
+          <div
+            style={{
+              background: '#f8fafc',
+              padding: 12,
+              borderRadius: 8,
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            <Typography.Text strong>
+              Quản lý &amp; Xác minh Thiết bị của Người gửi (
+              {ctx.requesterDevices.length})
+            </Typography.Text>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+              Thiết bị do Người gửi tự đăng ký sẽ ở trạng thái{' '}
+              <code>PENDING</code> (Tự khai báo). Supervisor/Admin cần đối chiếu
+              và xác minh quyền sở hữu (<code>VERIFIED</code>) trước khi Kỹ
+              thuật viên được phép gửi yêu cầu kết nối.
+            </div>
+            <Input
+              size="small"
+              value={verifyNote}
+              onChange={(e) => setVerifyNote(e.target.value)}
+              placeholder="Ghi chú xác minh / thu hồi thiết bị (tối thiểu 3 ký tự, lưu Audit Log)..."
+              style={{ marginBottom: 8 }}
+            />
+            <Space direction="vertical" size={6} style={{ width: '100%' }}>
+              {ctx.requesterDevices.map((dev) => (
+                <div
+                  key={dev.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    padding: '6px 10px',
+                    background: '#ffffff',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                  }}
+                >
+                  <Space wrap>
+                    <strong>{dev.label}</strong>
+                    <code>ID: {dev.rustdeskId}</code>
+                    <Tag
+                      color={
+                        dev.verificationStatus === 'VERIFIED'
+                          ? 'success'
+                          : dev.verificationStatus === 'PENDING'
+                            ? 'warning'
+                            : 'error'
+                      }
+                    >
+                      {dev.verificationStatus === 'VERIFIED'
+                        ? 'VERIFIED (Đã xác minh)'
+                        : dev.verificationStatus === 'PENDING'
+                          ? 'PENDING (Tự khai báo - Chờ xác minh)'
+                          : 'REVOKED (Đã thu hồi)'}
+                    </Tag>
+                  </Space>
+                  <Space size={6}>
+                    {dev.verificationStatus !== 'VERIFIED' && (
+                      <Button
+                        size="small"
+                        type="primary"
+                        loading={busy}
+                        disabled={verifyNote.trim().length < 3}
+                        onClick={() =>
+                          void runAction(
+                            () =>
+                              verifyRemoteDevice(dev.id, {
+                                verificationStatus: 'VERIFIED',
+                                reason: verifyNote.trim(),
+                              }),
+                            `Đã xác minh quyền sở hữu thiết bị "${dev.label}" (VERIFIED).`,
+                          )
+                        }
+                      >
+                        Xác minh (VERIFIED)
+                      </Button>
+                    )}
+                    {dev.verificationStatus !== 'REVOKED' && (
+                      <Button
+                        size="small"
+                        danger
+                        loading={busy}
+                        disabled={verifyNote.trim().length < 3}
+                        onClick={() =>
+                          void runAction(
+                            () =>
+                              verifyRemoteDevice(dev.id, {
+                                verificationStatus: 'REVOKED',
+                                reason: verifyNote.trim(),
+                              }),
+                            `Đã thu hồi xác minh thiết bị "${dev.label}" (REVOKED).`,
+                          )
+                        }
+                      >
+                        Thu hồi (REVOKED)
+                      </Button>
+                    )}
+                  </Space>
+                </div>
+              ))}
+            </Space>
+          </div>
+        )}
+
         {/* 4. LỊCH SỬ CÁC PHIÊN HỖ TRỢ TỪ XA CỦA TICKET */}
         <div>
           <Typography.Text strong style={{ fontSize: 13 }}>
@@ -865,8 +1002,8 @@ export default function TicketRemoteSupportPanel({
           type="info"
           showIcon
           style={{ marginBottom: 14 }}
-          message="Nguyên tắc Bảo mật SmartDesk"
-          description="SmartDesk chỉ lưu RustDesk ID định danh thiết bị của bạn, tuyệt đối KHÔNG lưu mật khẩu một lần (One-time Password) của RustDesk. Mỗi lần kết nối đều cần bạn chấp thuận."
+          message="Quy trình Tự khai báo & Xác minh Thiết bị (Device Verification)"
+          description="Thiết bị mới đăng ký sẽ ở trạng thái PENDING (Tự khai báo - Chờ xác minh) để tránh mạo danh ID. Sau khi IT Supervisor hoặc Administrator đối chiếu và xác minh (VERIFIED), Kỹ thuật viên mới có thể gửi yêu cầu hỗ trợ từ xa."
         />
         <Form
           form={deviceForm}
@@ -878,7 +1015,7 @@ export default function TicketRemoteSupportPanel({
                 setSelectedDeviceId(created.id);
                 setDeviceModalOpen(false);
               },
-              'Đã đăng ký thiết bị RustDesk thành công.',
+              'Đã đăng ký thiết bị ở trạng thái PENDING (Chờ IT Supervisor/Admin xác minh quyền sở hữu).',
             )
           }
         >
