@@ -314,7 +314,7 @@ describe('TicketsModule', () => {
     expect(data.ticketSla.create.resolutionDueAt.getTime() - data.createdAt.getTime()).toBe(240 * 60_000);
   });
 
-  it('rejects a Ticket asset reference when the asset is missing or soft-deleted', async () => {
+  it('rejects a foreign, missing or soft-deleted Ticket asset', async () => {
     const categoryId = '10000000-0000-4000-8000-000000000001';
     const assetId = '10000000-0000-4000-8000-000000000002';
     const requester = {
@@ -343,7 +343,14 @@ describe('TicketsModule', () => {
       ),
     ).rejects.toThrow(BadRequestException);
     expect(findAsset).toHaveBeenCalledWith({
-      where: { id: assetId, deletedAt: null },
+      where: {
+        id: assetId,
+        deletedAt: null,
+        OR: [
+          { assignments: { some: { userId: requester.id, returnedAt: null } } },
+          { sharedReportable: true, status: 'AVAILABLE' },
+        ],
+      },
       select: { id: true },
     });
   });

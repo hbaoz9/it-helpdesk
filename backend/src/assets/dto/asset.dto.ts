@@ -242,6 +242,7 @@ export class AssetRecordsQueryDto {
 
 export class CreateAssetDto {
   assetTag?: string;
+  sharedReportable?: boolean;
   name!: string;
   categoryId!: string;
   manufacturer?: string | null;
@@ -258,6 +259,10 @@ export class CreateAssetDto {
     const record = recordOf(input, 'asset');
     const dto = new CreateAssetDto();
     dto.assetTag = readString(record, 'assetTag', false, 80);
+    if (record.sharedReportable !== undefined) {
+      if (typeof record.sharedReportable !== 'boolean') throw new BadRequestException('sharedReportable must be a boolean');
+      dto.sharedReportable = record.sharedReportable;
+    }
     dto.name = readString(record, 'name', true, 150)!;
     dto.categoryId = readUuid(record, 'categoryId', true)!;
     dto.manufacturer = readString(record, 'manufacturer', false, 100, true);
@@ -275,6 +280,7 @@ export class CreateAssetDto {
 
 export class UpdateAssetDto {
   assetTag?: string;
+  sharedReportable?: boolean;
   name?: string;
   categoryId?: string;
   manufacturer?: string | null;
@@ -291,6 +297,10 @@ export class UpdateAssetDto {
     const record = recordOf(input, 'asset');
     const dto = new UpdateAssetDto();
     dto.assetTag = readString(record, 'assetTag', false, 80);
+    if (record.sharedReportable !== undefined) {
+      if (typeof record.sharedReportable !== 'boolean') throw new BadRequestException('sharedReportable must be a boolean');
+      dto.sharedReportable = record.sharedReportable;
+    }
     dto.name = readString(record, 'name', false, 150);
     if (dto.assetTag !== undefined && !dto.assetTag) {
       throw new BadRequestException('assetTag must not be empty');

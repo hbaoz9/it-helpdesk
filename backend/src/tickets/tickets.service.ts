@@ -616,7 +616,14 @@ export class TicketsService implements OnApplicationBootstrap, OnModuleDestroy {
     }
     if (dto.assetId) {
       const asset = await this.prisma.asset.findFirst({
-        where: { id: dto.assetId, deletedAt: null },
+        where: {
+          id: dto.assetId,
+          deletedAt: null,
+          OR: [
+            { assignments: { some: { userId: user.id, returnedAt: null } } },
+            { sharedReportable: true, status: 'AVAILABLE' },
+          ],
+        },
         select: { id: true },
       });
       if (!asset) {

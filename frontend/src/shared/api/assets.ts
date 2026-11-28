@@ -25,6 +25,7 @@ export interface AssetFilters {
 
 export interface AssetInput {
   code?: string;
+  sharedReportable?: boolean;
   name: string;
   categoryId: string;
   brand?: string;
@@ -54,6 +55,7 @@ function toAssetRecord(value: unknown): AssetRecord {
   const counts = asRecord(raw._count);
   return {
     id: String(raw.id ?? ''),
+    sharedReportable: raw.sharedReportable === true,
     code: String(raw.assetTag ?? raw.code ?? '-'),
     name: String(raw.name ?? ''),
     categoryId: String(raw.categoryId ?? category.id ?? ''),
@@ -275,6 +277,7 @@ export function searchAssetsForTicket(search = ''): Promise<AssetTicketSearchRec
 function toApiAssetInput(input: Partial<AssetInput>): RawRecord {
   return {
     ...(input.code !== undefined ? { assetTag: input.code } : {}),
+    ...(input.sharedReportable !== undefined ? { sharedReportable: input.sharedReportable } : {}),
     ...(input.name !== undefined ? { name: input.name } : {}),
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
     ...(input.brand !== undefined ? { manufacturer: input.brand } : {}),

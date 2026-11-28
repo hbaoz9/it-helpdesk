@@ -176,6 +176,7 @@ export interface AssetCategoryRecord {
 
 export interface AssetRecord {
   id: string;
+  sharedReportable: boolean;
   code: string;
   name: string;
   categoryId: string;

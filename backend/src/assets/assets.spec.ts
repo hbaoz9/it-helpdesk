@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -22,7 +22,7 @@ const requester: AuthenticatedUser = {
 };
 
 describe('AssetsService', () => {
-  it('searches all non-deleted company assets for ticket attachments with limited fields', async () => {
+  it('searches only requester-assigned or explicitly shared available assets', async () => {
     const findMany = vi.fn().mockResolvedValue([]);
     const service = new AssetsService({
       asset: { findMany },
@@ -37,9 +37,13 @@ describe('AssetsService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           deletedAt: null,
-          OR: expect.arrayContaining([
+          OR: [
+            { assignments: { some: { userId: requester.id, returnedAt: null } } },
+            { sharedReportable: true, status: 'AVAILABLE' },
+          ],
+          AND: [{ OR: expect.arrayContaining([
             { name: { contains: 'lap', mode: 'insensitive' } },
-          ]),
+          ]) }],
         }),
         select: {
           id: true,
@@ -91,6 +95,8 @@ describe('AssetsService', () => {
     const dto = UpdateAssetDto.validate({ warrantyExpires: null, notes: null });
     expect(dto.warrantyExpires).toBeNull();
     expect(dto.notes).toBeNull();
+    expect(CreateAssetDto.validate({ name: 'Shared printer', categoryId: '10000000-0000-4000-8000-000000000001', sharedReportable: true }).sharedReportable).toBe(true);
+    expect(() => UpdateAssetDto.validate({ sharedReportable: 'yes' })).toThrow(BadRequestException);
   });
 
   it('validates bounded filters for collection asset records', () => {
@@ -243,7 +249,7 @@ describe('AssetsService', () => {
       assetMaintenance: {
         create: vi.fn().mockResolvedValue({ id: 'maintenance-id' }),
       },
-      asset: { update: vi.fn().mockResolvedValue({}) },
+      asset: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       assetHistory: { create: vi.fn().mockResolvedValue({}) },
     };
     const prisma = {
@@ -289,6 +295,27 @@ describe('AssetsService', () => {
       }),
     );
     expect(tx.assetHistory.create).toHaveBeenCalledOnce();
+    expect(tx.asset.updateMany).toHaveBeenCalledWith({
+      where: { id: '10000000-0000-4000-8000-000000000002', status: 'AVAILABLE', deletedAt: null },
+      data: { status: 'UNDER_MAINTENANCE' },
+    });
+  });
+
+  it('does not create maintenance after a competing assignment changes asset status', async () => {
+    const technician: AuthenticatedUser = { ...requester, roles: ['TECHNICIAN'] };
+    const assetId = '10000000-0000-4000-8000-000000000002';
+    const tx = {
+      asset: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      assetMaintenance: { create: vi.fn() },
+    };
+    const service = new AssetsService({
+      asset: { findFirst: vi.fn().mockResolvedValue({ id: assetId, status: 'AVAILABLE' }) },
+      $transaction: vi.fn(async (callback) => callback(tx)),
+    } as unknown as PrismaService);
+    await expect(service.createMaintenance(
+      technician, assetId, CreateMaintenanceDto.validate({ title: 'Repair' }),
+    )).rejects.toThrow(ConflictException);
+    expect(tx.assetMaintenance.create).not.toHaveBeenCalled();
   });
 
   it('allows technicians to update maintenance while preserving transactional history', async () => {
@@ -304,13 +331,15 @@ describe('AssetsService', () => {
       id: '10000000-0000-4000-8000-000000000003',
       status: 'IN_PROGRESS',
       startedAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
     };
     const tx = {
       assetMaintenance: {
-        update: vi.fn().mockResolvedValue({ ...existing, status: 'COMPLETED' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({ ...existing, status: 'COMPLETED' }),
         count: vi.fn().mockResolvedValue(0),
       },
-      asset: { update: vi.fn().mockResolvedValue({}) },
+      asset: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       assetHistory: { create: vi.fn().mockResolvedValue({}) },
     };
     const prisma = {
@@ -344,8 +373,9 @@ describe('AssetsService', () => {
       updateInput,
     );
     expect(prisma.$transaction).toHaveBeenCalledOnce();
-    expect(tx.assetMaintenance.update).toHaveBeenCalledWith(
+    expect(tx.assetMaintenance.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ status: 'IN_PROGRESS', updatedAt: existing.updatedAt }),
         data: expect.objectContaining({
           status: 'COMPLETED',
           diagnosis: 'Battery fault',

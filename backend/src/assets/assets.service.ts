@@ -274,6 +274,7 @@ export class AssetsService {
             assetTag:
               dto.assetTag ?? `AST-${randomUUID().slice(0, 8).toUpperCase()}`,
             name: dto.name,
+            sharedReportable: dto.sharedReportable ?? false,
             categoryId: dto.categoryId,
             manufacturer: dto.manufacturer,
             model: dto.model,
@@ -315,6 +316,7 @@ export class AssetsService {
     const data: Prisma.AssetUncheckedUpdateInput = {
       ...(dto.assetTag !== undefined ? { assetTag: dto.assetTag } : {}),
       ...(dto.name !== undefined ? { name: dto.name } : {}),
+      ...(dto.sharedReportable !== undefined ? { sharedReportable: dto.sharedReportable } : {}),
       ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
       ...(dto.manufacturer !== undefined
         ? { manufacturer: dto.manufacturer }
@@ -446,10 +448,13 @@ export class AssetsService {
     }
     if (asset.status === dto.status) return asset;
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.asset.update({
-        where: { id },
+      const changed = await tx.asset.updateMany({
+        where: { id, status: asset.status, deletedAt: null },
         data: { status: dto.status },
       });
+      if (changed.count !== 1) {
+        throw new ConflictException('Asset status changed. Reload and try again');
+      }
       await tx.assetHistory.create({
         data: {
           assetId: id,
@@ -458,7 +463,7 @@ export class AssetsService {
           details: { from: asset.status, to: dto.status },
         },
       });
-      return updated;
+      return tx.asset.findUnique({ where: { id } });
     });
   }
 
@@ -487,15 +492,19 @@ export class AssetsService {
     return this.prisma.asset.findMany({
       where: {
         deletedAt: null,
+        OR: [
+          { assignments: { some: { userId: user.id, returnedAt: null } } },
+          { sharedReportable: true, status: 'AVAILABLE' },
+        ],
         ...(query.search
           ? {
-              OR: [
+              AND: [{ OR: [
                 { assetTag: { contains: query.search, mode: 'insensitive' } },
                 { name: { contains: query.search, mode: 'insensitive' } },
                 {
                   serialNumber: { contains: query.search, mode: 'insensitive' },
                 },
-              ],
+              ] }],
             }
           : {}),
       },
@@ -765,18 +774,17 @@ export class AssetsService {
   ) {
     this.requireAnyRole(user, ['TECHNICIAN', 'ADMIN']);
     this.assertId(id);
-    const asset = await this.requireAsset(id);
-    if (asset.status === 'ASSIGNED') {
-      throw new ConflictException(
-        'Return the asset before scheduling maintenance',
-      );
-    }
-    if (['RETIRED', 'DISPOSED', 'LOST'].includes(asset.status)) {
-      throw new ConflictException(
-        'This asset cannot be scheduled for maintenance',
-      );
-    }
+    await this.requireAsset(id);
     return this.prisma.$transaction(async (tx) => {
+      const changed = await tx.asset.updateMany({
+        where: { id, status: 'AVAILABLE', deletedAt: null },
+        data: { status: 'UNDER_MAINTENANCE' },
+      });
+      if (changed.count !== 1) {
+        throw new ConflictException(
+          'Only available assets can be scheduled for maintenance',
+        );
+      }
       const maintenance = await tx.assetMaintenance.create({
         data: {
           assetId: id,
@@ -791,10 +799,6 @@ export class AssetsService {
           cost: dto.cost,
           scheduledAt: dto.scheduledAt,
         },
-      });
-      await tx.asset.update({
-        where: { id },
-        data: { status: 'UNDER_MAINTENANCE' },
       });
       await tx.assetHistory.create({
         data: {
@@ -831,8 +835,13 @@ export class AssetsService {
     }
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.assetMaintenance.update({
-        where: { id: maintenanceId },
+      const changed = await tx.assetMaintenance.updateMany({
+        where: {
+          id: maintenanceId,
+          assetId: id,
+          status: existing.status,
+          updatedAt: existing.updatedAt,
+        },
         data: {
           status: dto.status,
           ...(dto.description !== undefined
@@ -854,6 +863,9 @@ export class AssetsService {
           ...(dto.status === 'COMPLETED' ? { completedAt: now } : {}),
         },
       });
+      if (changed.count !== 1) {
+        throw new ConflictException('Maintenance changed. Reload and try again');
+      }
       const hasOtherOpenRecords = await tx.assetMaintenance.count({
         where: {
           assetId: id,
@@ -861,18 +873,26 @@ export class AssetsService {
           status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
         },
       });
-      if (dto.status === 'COMPLETED' || dto.status === 'CANCELLED') {
-        if (!hasOtherOpenRecords) {
-          await tx.asset.update({
-            where: { id },
-            data: { status: 'AVAILABLE' },
+      if (!['COMPLETED', 'CANCELLED'].includes(existing.status)) {
+        if (dto.status === 'COMPLETED' || dto.status === 'CANCELLED') {
+          if (!hasOtherOpenRecords) {
+            const assetChanged = await tx.asset.updateMany({
+              where: { id, status: 'UNDER_MAINTENANCE', deletedAt: null },
+              data: { status: 'AVAILABLE' },
+            });
+            if (assetChanged.count !== 1) {
+              throw new ConflictException('Asset status changed. Reload and try again');
+            }
+          }
+        } else {
+          const assetChanged = await tx.asset.updateMany({
+            where: { id, status: 'UNDER_MAINTENANCE', deletedAt: null },
+            data: { status: 'UNDER_MAINTENANCE' },
           });
+          if (assetChanged.count !== 1) {
+            throw new ConflictException('Asset status changed. Reload and try again');
+          }
         }
-      } else {
-        await tx.asset.update({
-          where: { id },
-          data: { status: 'UNDER_MAINTENANCE' },
-        });
       }
       await tx.assetHistory.create({
         data: {
@@ -888,7 +908,7 @@ export class AssetsService {
           createdAt: now,
         },
       });
-      return updated;
+      return tx.assetMaintenance.findUnique({ where: { id: maintenanceId } });
     });
   }
 

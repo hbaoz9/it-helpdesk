@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Col,
   Descriptions,
   Drawer,
@@ -380,6 +381,7 @@ export function MyAssignedAssetsPage() {
 
 type AssetFormValues = {
   code?: string;
+  sharedReportable?: boolean;
   name: string;
   categoryId: string;
   brand?: string;
@@ -403,6 +405,7 @@ function AssetEditor({ open, asset, categories, onCancel, onSave }: {
   useEffect(() => {
     if (open) form.setFieldsValue(asset ? {
       code: asset.code,
+      sharedReportable: asset.sharedReportable,
       name: asset.name,
       categoryId: asset.categoryId,
       brand: asset.brand ?? '',
@@ -429,6 +432,7 @@ function AssetEditor({ open, asset, categories, onCancel, onSave }: {
         <Select allowClear options={Object.entries(conditionLabels).map(([value, label]) => ({ value, label }))} />
       </Form.Item>
       <Form.Item name="location" label="Vị trí"><Input /></Form.Item>
+      <Form.Item name="sharedReportable" label="Cho phép mọi Requester báo lỗi khi thiết bị chưa được cấp phát" valuePropName="checked"><Checkbox /></Form.Item>
       <Row gutter={12}><Col span={12}><Form.Item name="purchaseDate" label="Ngày mua"><Input type="date" /></Form.Item></Col><Col span={12}><Form.Item name="warrantyExpiration" label="Hết bảo hành"><Input type="date" /></Form.Item></Col></Row>
       <Form.Item name="description" label="Ghi chú"><Input.TextArea rows={3} /></Form.Item>
       <Button type="primary" htmlType="submit">Lưu tài sản</Button>

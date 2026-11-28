@@ -212,6 +212,7 @@ model Asset {
   model           String?
   serialNumber    String?            @unique @map("serial_number")
   status          AssetStatus        @default(AVAILABLE)
+  sharedReportable Boolean            @default(false) @map("shared_reportable")
   condition       AssetCondition     @default(GOOD)
   purchaseDate    DateTime?          @map("purchase_date") @db.Date
   purchaseCost    Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
