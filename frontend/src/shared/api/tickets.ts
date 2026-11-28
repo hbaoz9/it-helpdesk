@@ -19,6 +19,7 @@ export interface CreateTicketInput {
   categoryId: string;
   impact: ImpactLevel;
   urgency: UrgencyLevel;
+  assetId?: string;
 }
 
 export interface TicketFilters {

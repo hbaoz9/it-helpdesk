@@ -4,6 +4,7 @@ export class CreateTicketDto {
   title!: string;
   description!: string;
   categoryId!: string;
+  assetId?: string;
   impact!: 'LOW' | 'MEDIUM' | 'HIGH';
   urgency!: 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -48,6 +49,17 @@ export class CreateTicketDto {
       throw new BadRequestException('Ticket categoryId must be a UUID');
     }
 
+    if (
+      record.assetId !== undefined &&
+      record.assetId !== null &&
+      (typeof record.assetId !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          record.assetId.trim(),
+        ))
+    ) {
+      throw new BadRequestException('Ticket assetId must be a UUID');
+    }
+
     if (!['LOW', 'MEDIUM', 'HIGH'].includes(String(record.impact))) {
       throw new BadRequestException('Ticket impact must be LOW, MEDIUM, or HIGH');
     }
@@ -62,6 +74,7 @@ export class CreateTicketDto {
     dto.title = record.title.trim();
     dto.description = record.description.trim();
     dto.categoryId = record.categoryId.trim();
+    if (typeof record.assetId === 'string') dto.assetId = record.assetId.trim();
     dto.impact = record.impact as CreateTicketDto['impact'];
     dto.urgency = record.urgency as CreateTicketDto['urgency'];
 

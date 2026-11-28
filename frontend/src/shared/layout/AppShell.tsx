@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { BarChartOutlined, BellOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, MenuOutlined, PlusOutlined, RobotOutlined, SettingOutlined, SwapOutlined, TeamOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Tooltip, message } from 'antd';
+import type { MenuProps } from 'antd';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { menu, workspaces } from '../../app/workspaces';
@@ -13,10 +14,18 @@ import './AppShell.css';
 const { Sider, Header, Content } = Layout;
 const icons: Record<string, ReactNode> = {
   '/requester': <HomeOutlined />, '/requester/ai': <RobotOutlined />, '/requester/tickets': <FileTextOutlined />, '/requester/tickets/new': <PlusOutlined />,
+  '/requester/assets': <UnorderedListOutlined />,
   '/technician': <HomeOutlined />, '/technician/tickets': <UnorderedListOutlined />,
+  '/technician/assets/dashboard': <BarChartOutlined />, '/technician/assets': <UnorderedListOutlined />,
+  '/technician/asset-maintenance': <SettingOutlined />, '/technician/asset-history': <FileTextOutlined />,
   '/supervisor': <HomeOutlined />, '/supervisor/queue': <UnorderedListOutlined />,
   '/supervisor/assignments': <TeamOutlined />, '/supervisor/dashboard': <BarChartOutlined />,
+  '/supervisor/assets/dashboard': <BarChartOutlined />, '/supervisor/assets': <UnorderedListOutlined />,
+  '/supervisor/assets/assignments': <TeamOutlined />, '/supervisor/asset-maintenance': <SettingOutlined />, '/supervisor/asset-history': <FileTextOutlined />,
   '/admin': <TeamOutlined />, '/admin/categories': <UnorderedListOutlined />, '/admin/sla': <SettingOutlined />,
+  '/admin/assets/dashboard': <BarChartOutlined />, '/admin/assets': <UnorderedListOutlined />,
+  '/admin/assets/assignments': <TeamOutlined />, '/admin/asset-maintenance': <SettingOutlined />,
+  '/admin/asset-history': <FileTextOutlined />, '/admin/asset-categories': <SettingOutlined />,
 };
 
 export default function AppShell({ workspace }: { workspace: Workspace }) {
@@ -29,7 +38,28 @@ export default function AppShell({ workspace }: { workspace: Workspace }) {
     user?.roles.includes(workspaces[key].role),
   );
   const currentMenu = menu.filter((item) => item.workspace === workspace);
-  const selected = [...currentMenu].reverse().find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`));
+  const assetMenu = currentMenu.filter((item) => item.path.includes('/assets') || item.path.includes('/asset-'));
+  const menuItem = (item: (typeof currentMenu)[number]) => ({
+    key: item.path,
+    icon: icons[item.path],
+    label: <Link to={item.path} onClick={() => setMobileOpen(false)}>{item.label}</Link>,
+  });
+  const menuItems: MenuProps['items'] = workspace === 'requester'
+    ? currentMenu.map(menuItem)
+    : [
+        ...currentMenu.filter((item) => !assetMenu.includes(item)).map(menuItem),
+        ...(assetMenu.length ? [{
+          type: 'group' as const,
+          label: 'QUẢN LÝ TÀI SẢN',
+          children: assetMenu.map(menuItem),
+        }] : []),
+      ];
+  const selected = currentMenu
+    .filter((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
+    .reduce<(typeof currentMenu)[number] | undefined>(
+      (mostSpecific, item) => !mostSpecific || item.path.length > mostSpecific.path.length ? item : mostSpecific,
+      undefined,
+    );
 
   const signOut = async () => {
     try {
@@ -46,7 +76,7 @@ export default function AppShell({ workspace }: { workspace: Workspace }) {
     </Link>
     <div className="smartdesk-sidebar-label">{workspaces[workspace].label.toUpperCase()}</div>
     <Menu mode="inline" selectedKeys={[selected?.path ?? workspaces[workspace].path]}
-      items={currentMenu.map((item) => ({ key: item.path, icon: icons[item.path], label: <Link to={item.path} onClick={() => setMobileOpen(false)}>{item.label}</Link> }))} />
+      items={menuItems} />
     {available.length > 1 && <>
       <div className="smartdesk-sidebar-label">WORKSPACE KHÁC</div>
       <Menu mode="inline" selectedKeys={[]}
