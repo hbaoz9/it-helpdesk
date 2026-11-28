@@ -60,6 +60,12 @@ export default function RequesterTicketDetailPage() {
             <Descriptions.Item label="Tính khẩn cấp">{ticket.urgency}</Descriptions.Item>
             <Descriptions.Item label="Ngày tạo">{new Date(ticket.createdAt).toLocaleString('vi-VN')}</Descriptions.Item>
             <Descriptions.Item label="Cập nhật gần nhất">{new Date(ticket.updatedAt).toLocaleString('vi-VN')}</Descriptions.Item>
+            {ticket.asset && <>
+              <Descriptions.Item label="Tài sản liên quan">{ticket.asset.assetTag} · {ticket.asset.name}</Descriptions.Item>
+              <Descriptions.Item label="Danh mục">{ticket.asset.category.name}</Descriptions.Item>
+              <Descriptions.Item label="Vị trí">{ticket.asset.location || '—'}</Descriptions.Item>
+              <Descriptions.Item label="Trạng thái tài sản">{ticket.asset.status.replaceAll('_', ' ')}</Descriptions.Item>
+            </>}
           </Descriptions>
           <Typography.Title level={5} style={{ marginTop: 24 }}>Mô tả vấn đề</Typography.Title>
           <Typography.Paragraph className="requester-description">{ticket.description}</Typography.Paragraph>

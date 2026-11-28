@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Input, Spin, Timeline, Typography } from 'antd';
+import { Alert, Button, Descriptions, Input, Spin, Timeline, Typography } from 'antd';
 import { CheckOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -149,6 +149,16 @@ export default function TicketDetailPage() {
               />
             )}
           </section>
+
+          {ticket.asset && <section className="tech-card" style={{ marginBottom: 16, padding: 18 }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: 16 }}>Tài sản liên quan</h2>
+            <Descriptions bordered column={1} size="small">
+              <Descriptions.Item label="Tài sản">{ticket.asset.assetTag} · {ticket.asset.name}</Descriptions.Item>
+              <Descriptions.Item label="Danh mục">{ticket.asset.category.name}</Descriptions.Item>
+              <Descriptions.Item label="Vị trí">{ticket.asset.location || '—'}</Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">{ticket.asset.status.replaceAll('_', ' ')}</Descriptions.Item>
+            </Descriptions>
+          </section>}
 
           <div style={{ marginBottom: 16 }}>
             <TicketRemoteSupportPanel

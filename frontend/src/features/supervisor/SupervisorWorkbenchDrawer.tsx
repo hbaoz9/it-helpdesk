@@ -314,6 +314,29 @@ export default function SupervisorWorkbenchDrawer({
               </Descriptions.Item>
             </Descriptions>
 
+            {ticket.asset && (
+              <Descriptions
+                title="Tài sản liên quan"
+                style={{ marginTop: 16 }}
+                column={{ xs: 1, sm: 2 }}
+                size="small"
+                bordered
+              >
+                <Descriptions.Item label="Tài sản">
+                  {ticket.asset.assetTag} · {ticket.asset.name}
+                </Descriptions.Item>
+                <Descriptions.Item label="Danh mục">
+                  {ticket.asset.category.name}
+                </Descriptions.Item>
+                <Descriptions.Item label="Vị trí">
+                  {ticket.asset.location || '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Trạng thái">
+                  {ticket.asset.status.replaceAll('_', ' ')}
+                </Descriptions.Item>
+              </Descriptions>
+            )}
+
             <Typography.Paragraph
               style={{
                 marginTop: 12,
