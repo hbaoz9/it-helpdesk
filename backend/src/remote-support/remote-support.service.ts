@@ -67,7 +67,7 @@ export interface RemoteSessionSnapshot {
   ticketTitle: string;
   deviceId: string;
   deviceLabel: string;
-  rustdeskId: string;
+  rustdeskId: string | null;
   deviceOsName: string | null;
   requester: { id: string; fullName: string; email?: string };
   technician: { id: string; fullName: string; email?: string };
@@ -114,7 +114,7 @@ export class RemoteSupportService {
         publicKey: null,
         approvalTtlMinutes: 15,
         clientGuideUrl: 'https://rustdesk.com/docs/en/client/',
-        enabled: true,
+        enabled: false,
       },
     });
 
@@ -154,7 +154,7 @@ export class RemoteSupportService {
             label: dto.label,
             rustdeskId: dto.rustdeskId,
             osName: dto.osName ?? null,
-            verificationStatus: 'VERIFIED',
+            verificationStatus: 'PENDING',
             active: true,
           },
         });
@@ -168,7 +168,6 @@ export class RemoteSupportService {
             afterJson: JSON.stringify({
               ownerId: device.ownerId,
               label: device.label,
-              rustdeskId: device.rustdeskId,
               osName: device.osName,
               verificationStatus: device.verificationStatus,
               active: device.active,
@@ -221,7 +220,12 @@ export class RemoteSupportService {
           data: {
             ...(dto.label !== undefined ? { label: dto.label } : {}),
             ...(dto.rustdeskId !== undefined
-              ? { rustdeskId: dto.rustdeskId }
+              ? {
+                  rustdeskId: dto.rustdeskId,
+                  ...(dto.rustdeskId !== existing.rustdeskId
+                    ? { verificationStatus: 'PENDING' as const }
+                    : {}),
+                }
               : {}),
             ...(dto.osName !== undefined ? { osName: dto.osName } : {}),
             ...(dto.active !== undefined ? { active: dto.active } : {}),
@@ -236,13 +240,11 @@ export class RemoteSupportService {
             entityId: updated.id,
             beforeJson: JSON.stringify({
               label: existing.label,
-              rustdeskId: existing.rustdeskId,
               osName: existing.osName,
               active: existing.active,
             }),
             afterJson: JSON.stringify({
               label: updated.label,
-              rustdeskId: updated.rustdeskId,
               osName: updated.osName,
               active: updated.active,
             }),
@@ -323,7 +325,7 @@ export class RemoteSupportService {
 
       const content = dto.remoteSupportRequested
         ? device
-          ? `Người gửi bật yêu cầu Hỗ trợ từ xa qua RustDesk · Thiết bị: ${device.label} (ID: ${device.rustdeskId})`
+          ? `Người gửi bật yêu cầu Hỗ trợ từ xa qua RustDesk · Thiết bị: ${device.label}`
           : 'Người gửi bật yêu cầu Hỗ trợ từ xa qua RustDesk'
         : 'Người gửi tắt yêu cầu Hỗ trợ từ xa qua RustDesk';
 
@@ -407,7 +409,7 @@ export class RemoteSupportService {
       this.prisma.remoteSupportSession.findMany({
         where: { ticketId },
         include: {
-          ticket: { select: { id: true, code: true, title: true } },
+          ticket: { select: { id: true, code: true, title: true, assigneeId: true } },
           device: true,
           requester: { select: { id: true, fullName: true, email: true } },
           technician: { select: { id: true, fullName: true, email: true } },
@@ -417,14 +419,20 @@ export class RemoteSupportService {
       this.getClientConfig(),
     ]);
 
+    const isOwner = user.roles.includes('REQUESTER') && ticket.requesterId === user.id;
+    const redactDevice = <T extends { rustdeskId: string }>(device: T) =>
+      isOwner ? device : { ...device, rustdeskId: null };
+
     return {
       ticketId: ticket.id,
       ticketCode: ticket.code,
       ticketStatus: ticket.status,
       remoteSupportRequested: ticket.remoteSupportRequested,
       preferredDeviceId: ticket.preferredDeviceId,
-      preferredDevice: ticket.preferredDevice,
-      requesterDevices,
+      preferredDevice: ticket.preferredDevice
+        ? redactDevice(ticket.preferredDevice)
+        : null,
+      requesterDevices: requesterDevices.map(redactDevice),
       sessions: sessions.map((s) => this.toSessionSnapshot(s, user)),
       rustdeskConfig,
     };
@@ -531,7 +539,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[RustDesk Remote Support] Kỹ thuật viên ${user.fullName} gửi yêu cầu kết nối tới thiết bị "${device.label}" (ID: ${device.rustdeskId}). Đang chờ Người gửi chấp thuận${noteSuffix}`,
+          content: `[RustDesk Remote Support] Kỹ thuật viên ${user.fullName} gửi yêu cầu kết nối tới thiết bị "${device.label}". Đang chờ Người gửi chấp thuận${noteSuffix}`,
           createdAt: now,
         },
       });
@@ -542,7 +550,7 @@ export class RemoteSupportService {
           ticketId: ticket.id,
           eventKey: `remote_session:${session.id}:requested`,
           title: `Yêu cầu hỗ trợ từ xa (${ticket.code})`,
-          message: `Kỹ thuật viên ${user.fullName} đề nghị kết nối RustDesk tới thiết bị "${device.label}" (${device.rustdeskId}). Vui lòng mở Ticket để Chấp thuận hoặc Từ chối.`,
+          message: `Kỹ thuật viên ${user.fullName} đề nghị kết nối RustDesk tới thiết bị "${device.label}". Vui lòng mở Ticket để Chấp thuận hoặc Từ chối.`,
           createdAt: now,
         },
       });
@@ -559,7 +567,6 @@ export class RemoteSupportService {
             status: session.status,
             ticketId: session.ticketId,
             deviceId: session.deviceId,
-            rustdeskId: device.rustdeskId,
             requesterId: session.requesterId,
             technicianId: session.technicianId,
           }),
@@ -568,6 +575,13 @@ export class RemoteSupportService {
       });
 
       return session;
+    }).catch((error: unknown) => {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException(
+          'An active remote support session already exists for this ticket or device',
+        );
+      }
+      throw error;
     });
 
     return this.toSessionSnapshot(created, user);
@@ -603,6 +617,9 @@ export class RemoteSupportService {
         `Cannot approve a session in status ${existing.status}`,
       );
     }
+    if (!['ASSIGNED', 'IN_PROGRESS'].includes(existing.ticket.status)) {
+      throw new ConflictException('Ticket is no longer open for remote support');
+    }
 
     if (
       !existing.device.active ||
@@ -620,7 +637,7 @@ export class RemoteSupportService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const session = await tx.remoteSupportSession.update({
-        where: { id: sessionId },
+        where: { id: sessionId, status: 'REQUESTED' },
         data: {
           status: 'APPROVED',
           approvedAt: now,
@@ -651,7 +668,7 @@ export class RemoteSupportService {
           ticketId: session.ticketId,
           eventKey: `remote_session:${session.id}:approved`,
           title: `Đã chấp thuận kết nối RustDesk (${session.ticket.code})`,
-          message: `${user.fullName} đã chấp thuận kết nối RustDesk tới thiết bị "${existing.device.label}" (ID: ${existing.device.rustdeskId}). Hiệu lực ${config.approvalTtlMinutes} phút.`,
+          message: `${user.fullName} đã chấp thuận kết nối RustDesk tới thiết bị "${existing.device.label}". Hiệu lực ${config.approvalTtlMinutes} phút.`,
           createdAt: now,
         },
       });
@@ -674,7 +691,7 @@ export class RemoteSupportService {
       });
 
       return session;
-    });
+    }).catch((error: unknown) => this.rethrowTransitionConflict(error));
 
     return this.toSessionSnapshot(updated, user);
   }
@@ -713,7 +730,7 @@ export class RemoteSupportService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const session = await tx.remoteSupportSession.update({
-        where: { id: sessionId },
+        where: { id: sessionId, status: 'REQUESTED' },
         data: {
           status: 'REJECTED',
           rejectedAt: now,
@@ -770,7 +787,7 @@ export class RemoteSupportService {
       });
 
       return session;
-    });
+    }).catch((error: unknown) => this.rethrowTransitionConflict(error));
 
     return this.toSessionSnapshot(updated, user);
   }
@@ -816,11 +833,14 @@ export class RemoteSupportService {
         'Session must be explicitly APPROVED by the Requester before starting connection',
       );
     }
+    if (!['ASSIGNED', 'IN_PROGRESS'].includes(existing.ticket.status)) {
+      throw new ConflictException('Ticket is no longer open for remote support');
+    }
 
     if (existing.approvalExpiresAt && existing.approvalExpiresAt <= now) {
       await this.prisma.$transaction(async (tx) => {
         await tx.remoteSupportSession.update({
-          where: { id: sessionId },
+          where: { id: sessionId, status: 'APPROVED' },
           data: {
             status: 'CANCELLED',
             cancelReason: 'Thời hạn chấp thuận đã hết hạn (Approval TTL expired)',
@@ -859,13 +879,13 @@ export class RemoteSupportService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const session = await tx.remoteSupportSession.update({
-        where: { id: sessionId },
+        where: { id: sessionId, status: 'APPROVED', approvalExpiresAt: { gt: now } },
         data: {
           status: 'IN_PROGRESS',
           startedAt: now,
         },
         include: {
-          ticket: { select: { id: true, code: true, title: true } },
+          ticket: { select: { id: true, code: true, title: true, assigneeId: true } },
           device: true,
           requester: { select: { id: true, fullName: true, email: true } },
           technician: { select: { id: true, fullName: true, email: true } },
@@ -878,7 +898,7 @@ export class RemoteSupportService {
           actorId: user.id,
           type: 'COMMENT',
           visibility: 'PUBLIC',
-          content: `[RustDesk Remote Support] Kỹ thuật viên ${user.fullName} xác nhận ĐANG HỖ TRỢ TỪ XA (IN_PROGRESS) trên thiết bị "${existing.device.label}" (ID: ${existing.device.rustdeskId}).`,
+          content: `[RustDesk Remote Support] Kỹ thuật viên ${user.fullName} xác nhận ĐANG HỖ TRỢ TỪ XA (IN_PROGRESS) trên thiết bị "${existing.device.label}".`,
           createdAt: now,
         },
       });
@@ -900,7 +920,7 @@ export class RemoteSupportService {
       });
 
       return session;
-    });
+    }).catch((error: unknown) => this.rethrowTransitionConflict(error));
 
     return this.toSessionSnapshot(updated, user);
   }
@@ -914,7 +934,7 @@ export class RemoteSupportService {
     const existing = await this.prisma.remoteSupportSession.findUnique({
       where: { id: sessionId },
       include: {
-        ticket: { select: { id: true, code: true, title: true } },
+        ticket: { select: { id: true, code: true, title: true, assigneeId: true } },
         device: true,
       },
     });
@@ -924,7 +944,9 @@ export class RemoteSupportService {
     }
 
     const isOwnerTechnician =
-      user.roles.includes('TECHNICIAN') && existing.technicianId === user.id;
+      user.roles.includes('TECHNICIAN') &&
+      existing.technicianId === user.id &&
+      existing.ticket.assigneeId === user.id;
     const isOwnerRequester =
       user.roles.includes('REQUESTER') && existing.requesterId === user.id;
 
@@ -942,7 +964,7 @@ export class RemoteSupportService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const session = await tx.remoteSupportSession.update({
-        where: { id: sessionId },
+        where: { id: sessionId, status: 'IN_PROGRESS' },
         data: {
           status: 'COMPLETED',
           endedAt: now,
@@ -1001,7 +1023,7 @@ export class RemoteSupportService {
       });
 
       return session;
-    });
+    }).catch((error: unknown) => this.rethrowTransitionConflict(error));
 
     return this.toSessionSnapshot(updated, user);
   }
@@ -1015,7 +1037,7 @@ export class RemoteSupportService {
     const existing = await this.prisma.remoteSupportSession.findUnique({
       where: { id: sessionId },
       include: {
-        ticket: { select: { id: true, code: true, title: true } },
+        ticket: { select: { id: true, code: true, title: true, assigneeId: true } },
         device: true,
       },
     });
@@ -1027,7 +1049,9 @@ export class RemoteSupportService {
     const isOwnerRequester =
       user.roles.includes('REQUESTER') && existing.requesterId === user.id;
     const isOwnerTechnician =
-      user.roles.includes('TECHNICIAN') && existing.technicianId === user.id;
+      user.roles.includes('TECHNICIAN') &&
+      existing.technicianId === user.id &&
+      existing.ticket.assigneeId === user.id;
     const isSupervisor = user.roles.includes('SUPERVISOR');
 
     if (!isOwnerRequester && !isOwnerTechnician && !isSupervisor) {
@@ -1061,7 +1085,7 @@ export class RemoteSupportService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const session = await tx.remoteSupportSession.update({
-        where: { id: sessionId },
+        where: { id: sessionId, status: { in: ACTIVE_SESSION_STATUSES } },
         data: {
           status: 'CANCELLED',
           endedAt: now,
@@ -1124,7 +1148,7 @@ export class RemoteSupportService {
       });
 
       return session;
-    });
+    }).catch((error: unknown) => this.rethrowTransitionConflict(error));
 
     return this.toSessionSnapshot(updated, user);
   }
@@ -1165,7 +1189,7 @@ export class RemoteSupportService {
       this.prisma.remoteSupportSession.findMany({
         where,
         include: {
-          ticket: { select: { id: true, code: true, title: true } },
+          ticket: { select: { id: true, code: true, title: true, assigneeId: true } },
           device: true,
           requester: { select: { id: true, fullName: true, email: true } },
           technician: { select: { id: true, fullName: true, email: true } },
@@ -1293,6 +1317,13 @@ export class RemoteSupportService {
     return count > 0;
   }
 
+  private rethrowTransitionConflict(error: unknown): never {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+      throw new ConflictException('Session changed. Reload and try again');
+    }
+    throw error;
+  }
+
   private toSessionSnapshot(
     session: {
       id: string;
@@ -1311,7 +1342,7 @@ export class RemoteSupportService {
       rejectedAt: Date | null;
       startedAt: Date | null;
       endedAt: Date | null;
-      ticket: { id: string; code: string; title: string };
+      ticket: { id: string; code: string; title: string; assigneeId?: string | null };
       device: {
         id: string;
         label: string;
@@ -1325,10 +1356,14 @@ export class RemoteSupportService {
   ): RemoteSessionSnapshot {
     const isAssignedTechnician =
       viewer.roles.includes('TECHNICIAN') &&
-      session.technicianId === viewer.id;
+      session.technicianId === viewer.id &&
+      session.ticket.assigneeId === viewer.id;
     const canLaunchRustdesk =
       isAssignedTechnician &&
       (session.status === 'APPROVED' || session.status === 'IN_PROGRESS');
+    const canSeeId =
+      (viewer.roles.includes('REQUESTER') && session.requesterId === viewer.id) ||
+      canLaunchRustdesk;
 
     return {
       id: session.id,
@@ -1337,7 +1372,7 @@ export class RemoteSupportService {
       ticketTitle: session.ticket.title,
       deviceId: session.deviceId,
       deviceLabel: session.device.label,
-      rustdeskId: session.device.rustdeskId,
+      rustdeskId: canSeeId ? session.device.rustdeskId : null,
       deviceOsName: session.device.osName,
       requester: session.requester,
       technician: session.technician,

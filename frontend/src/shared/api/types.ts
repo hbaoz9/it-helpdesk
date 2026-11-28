@@ -183,7 +183,7 @@ export interface RemoteSupportSessionRecord {
   ticketTitle: string;
   deviceId: string;
   deviceLabel: string;
-  rustdeskId: string;
+  rustdeskId: string | null;
   deviceOsName: string | null;
   requester: { id: string; fullName: string; email?: string };
   technician: { id: string; fullName: string; email?: string };
@@ -208,8 +208,8 @@ export interface TicketRemoteSupportContext {
   ticketStatus: TicketStatus;
   remoteSupportRequested: boolean;
   preferredDeviceId: string | null;
-  preferredDevice: UserDeviceRecord | null;
-  requesterDevices: UserDeviceRecord[];
+  preferredDevice: (Omit<UserDeviceRecord, 'rustdeskId'> & { rustdeskId: string | null }) | null;
+  requesterDevices: Array<Omit<UserDeviceRecord, 'rustdeskId'> & { rustdeskId: string | null }>;
   sessions: RemoteSupportSessionRecord[];
   rustdeskConfig: RustdeskClientConfig;
 }
