@@ -209,6 +209,8 @@ export default function AdminHomePage() {
   const [rustdeskConfig, setRustdeskConfig] =
     useState<AdminRustdeskConfigRecord | null>(null);
   const [rustdeskSaving, setRustdeskSaving] = useState(false);
+  const [verifyingDevice, setVerifyingDevice] = useState<AdminDeviceRecord | null>(null);
+  const [verificationSubmitting, setVerificationSubmitting] = useState(false);
 
   // Audit Logs state
   const [auditLogs, setAuditLogs] = useState<AdminAuditLogRecord[]>([]);
@@ -1402,7 +1404,7 @@ export default function AdminHomePage() {
                                   value={rec.verificationStatus}
                                   style={{ width: 115 }}
                                   options={[
-                                    { value: 'VERIFIED', label: 'VERIFIED' },
+                                    { value: 'VERIFIED', label: 'VERIFIED', disabled: true },
                                     { value: 'PENDING', label: 'PENDING' },
                                     { value: 'REVOKED', label: 'REVOKED' },
                                   ]}
@@ -1427,6 +1429,11 @@ export default function AdminHomePage() {
                                       );
                                   }}
                                 />
+                                {rec.verificationStatus !== 'VERIFIED' && rec.active && (
+                                  <Button size="small" onClick={() => setVerifyingDevice(rec)}>
+                                    Xác minh trực tiếp
+                                  </Button>
+                                )}
                                 <Button
                                   size="small"
                                   danger={rec.active}
@@ -1690,6 +1697,34 @@ export default function AdminHomePage() {
               Tạo tài khoản
             </Button>
           </div>
+        </Form>
+      </Modal>
+      <Modal
+        title="Xác minh RustDesk ID trực tiếp"
+        open={Boolean(verifyingDevice)}
+        onCancel={() => setVerifyingDevice(null)}
+        footer={null}
+        destroyOnHidden
+      >
+        <Alert type="warning" showIcon message="Chỉ xác minh sau khi trực tiếp quan sát ID trên thiết bị của người dùng. SmartDesk không tự kiểm tra RustDesk client hoặc quyền điều khiển máy." style={{ marginBottom: 16 }} />
+        <Form layout="vertical" onFinish={(values: { observedRustdeskId: string; reason: string }) => {
+          if (!verifyingDevice) return;
+          setVerificationSubmitting(true);
+          void updateAdminDevice(verifyingDevice.id, {
+            verificationStatus: 'VERIFIED',
+            verificationMethod: 'IN_PERSON',
+            observedRustdeskId: values.observedRustdeskId,
+            reason: values.reason,
+          }).then(() => {
+            messageApi.success('Đã ghi nhận xác minh trực tiếp.');
+            setVerifyingDevice(null);
+            void loadRustdeskData();
+            void loadAuditLogs();
+          }).catch((error: unknown) => messageApi.error(error instanceof Error ? error.message : 'Xác minh thất bại')).finally(() => setVerificationSubmitting(false));
+        }}>
+          <Form.Item name="observedRustdeskId" label="ID quan sát trực tiếp trên thiết bị" rules={[{ required: true, message: 'Nhập RustDesk ID đã quan sát' }]}><Input autoComplete="off" /></Form.Item>
+          <Form.Item name="reason" label="Bằng chứng kiểm tra" rules={[{ required: true, min: 20, message: 'Ghi ít nhất 20 ký tự về cách và thời điểm xác minh' }]}><Input.TextArea rows={3} placeholder="Ví dụ: Đối chiếu trực tiếp trên màn hình thiết bị tại phòng IT lúc..." /></Form.Item>
+          <Button type="primary" htmlType="submit" loading={verificationSubmitting}>Ghi nhận xác minh</Button>
         </Form>
       </Modal>
 

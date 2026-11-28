@@ -438,6 +438,8 @@ export class UpdateAdminDeviceDto {
   label?: string;
   active?: boolean;
   verificationStatus?: DeviceVerificationStatusInput;
+  observedRustdeskId?: string;
+  verificationMethod?: 'IN_PERSON';
   reason?: string;
 
   static validate(input: unknown): UpdateAdminDeviceDto {
@@ -500,6 +502,20 @@ export class UpdateAdminDeviceDto {
       }
     }
 
+    if (dto.verificationStatus === 'VERIFIED') {
+      if (record.verificationMethod !== 'IN_PERSON') {
+        throw new BadRequestException('In-person verification is required');
+      }
+      if (typeof record.observedRustdeskId !== 'string') {
+        throw new BadRequestException('Observed RustDesk ID is required');
+      }
+      dto.observedRustdeskId = record.observedRustdeskId.replace(/\s+/g, '');
+      dto.verificationMethod = 'IN_PERSON';
+      if (!dto.reason || dto.reason.length < 20) {
+        throw new BadRequestException('Verification evidence must be at least 20 characters');
+      }
+    }
+
     if (!hasField) {
       throw new BadRequestException('At least one device field is required');
     }
@@ -551,7 +567,7 @@ export class UpdateRustdeskConfigDto {
     const dto = new UpdateRustdeskConfigDto();
     dto.idServerHost = record.idServerHost.trim();
     dto.approvalTtlMinutes = approvalTtlMinutes;
-    dto.enabled = (record.enabled as boolean | undefined) ?? true;
+    dto.enabled = (record.enabled as boolean | undefined) ?? false;
 
     if (record.relayServerHost !== undefined) {
       if (record.relayServerHost === null || record.relayServerHost === '') {

@@ -172,6 +172,8 @@ export interface UpdateAdminDevicePayload {
   label?: string;
   active?: boolean;
   verificationStatus?: DeviceVerificationStatus;
+  observedRustdeskId?: string;
+  verificationMethod?: 'IN_PERSON';
   reason?: string;
 }
 

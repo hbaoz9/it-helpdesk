@@ -230,6 +230,12 @@ Endpoint cần Session và role `REQUESTER`. Giới hạn 10 lượt mỗi ngư�
 
 **Sai mật khẩu PostgreSQL:** Với volume đã có dữ liệu, thay đổi `POSTGRES_PASSWORD` trong `.env` không tự đổi mật khẩu tài khoản hiện tại trong database.
 
+### RustDesk Remote Support (PR #19)
+
+Remote Support mặc định tắt. Administrator chỉ bật sau khi cấu hình RustDesk server/client thật và kiểm tra kết nối. Thiết bị do Requester tự khai báo có trạng thái `PENDING`; việc nhập ID không chứng minh quyền sở hữu hoặc khả năng kết nối. Administrator phải quan sát ID trực tiếp trên thiết bị, nhập lại ID và ghi bằng chứng (ít nhất 20 ký tự) trước khi đánh dấu `VERIFIED`. Nếu Requester đổi ID, thiết bị trở lại `PENDING`. Tất cả thao tác xác minh được ghi Audit Log.
+
+Chấp thuận trên SmartDesk chỉ cho phép quy trình yêu cầu phiên và hiển thị ID cho Technician đang phụ trách Ticket trong thời hạn chấp thuận. Quyền điều khiển máy và sự đồng ý cuối cùng do RustDesk client/host thực thi. Không bật unattended access, không tự cấp mật khẩu. Chưa có kiểm thử kết nối giữa hai thiết bị thật thì chỉ coi API/workflow đã được kiểm tra, không coi Remote Support hoàn chỉnh.
+
 ## 8. Quy tắc làm việc nhóm
 
 - Nhánh tích hợp: `develop`.

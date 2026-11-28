@@ -19,6 +19,7 @@ import {
   CreateAdminCategoryDto,
   CreateAdminUserDto,
   UpdateAdminCategoryDto,
+  UpdateAdminDeviceDto,
   UpdateAdminUserDto,
   UpdateSlaPolicyDto,
 } from './dto/admin.dto.js';
@@ -611,5 +612,58 @@ describe('AdminModule (Identity, Categories & SLA Policies)', () => {
         ),
       ).toBe(true);
     });
+  });
+});
+
+describe('Admin device verification', () => {
+  const actor: AuthenticatedUser = {
+    id: '11111111-1111-4111-8111-111111111111',
+    email: 'admin@helpdesk.local',
+    fullName: 'Admin',
+    roles: ['ADMIN'],
+  };
+
+  it('requires an in-person observation and a recorded explanation', () => {
+    expect(() => UpdateAdminDeviceDto.validate({ verificationStatus: 'VERIFIED' })).toThrow(BadRequestException);
+    expect(() => UpdateAdminDeviceDto.validate({ verificationStatus: 'VERIFIED', verificationMethod: 'IN_PERSON', observedRustdeskId: '123456789', reason: 'short' })).toThrow(BadRequestException);
+  });
+
+  it('refuses verification when the observed ID differs from the registered ID', async () => {
+    const update = vi.fn();
+    const prisma = {
+      userDevice: { findUnique: vi.fn().mockResolvedValue({ id: 'device-id', rustdeskId: '123456789', active: true }) },
+      $transaction: update,
+    } as unknown as PrismaService;
+    const service = new AdminService(prisma, {} as AuthService, {} as SessionService);
+    const dto = UpdateAdminDeviceDto.validate({
+      verificationStatus: 'VERIFIED',
+      verificationMethod: 'IN_PERSON',
+      observedRustdeskId: '987654321',
+      reason: 'Observed on the employee laptop at the IT desk',
+    });
+    await expect(service.updateDevice(actor, 'device-id', dto)).rejects.toThrow(BadRequestException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('records an administrator in-person attestation before marking a device verified', async () => {
+    const existing = { id: 'device-id', label: 'Laptop', rustdeskId: '123456789', active: true, verificationStatus: 'PENDING' };
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const updated = { ...existing, verificationStatus: 'VERIFIED', owner: { id: 'owner-id', fullName: 'Requester', email: 'requester@example.com' }, _count: { remoteSessions: 0 } };
+    const prisma = {
+      userDevice: { findUnique: vi.fn().mockResolvedValue(existing), update: vi.fn().mockResolvedValue(updated) },
+      auditLog: { create: auditCreate },
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(prisma)),
+    } as unknown as PrismaService;
+    const service = new AdminService(prisma, {} as AuthService, {} as SessionService);
+    const dto = UpdateAdminDeviceDto.validate({
+      verificationStatus: 'VERIFIED', verificationMethod: 'IN_PERSON',
+      observedRustdeskId: '123 456 789',
+      reason: 'Observed the ID on the employee laptop at the IT desk',
+    });
+    const result = await service.updateDevice(actor, 'device-id', dto);
+    expect(result.verificationStatus).toBe('VERIFIED');
+    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ actorId: actor.id, reason: dto.reason }),
+    }));
   });
 });

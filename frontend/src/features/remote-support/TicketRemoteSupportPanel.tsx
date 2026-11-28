@@ -290,8 +290,8 @@ export default function TicketRemoteSupportPanel({
               style={{ marginBottom: 12 }}
             >
               <Descriptions.Item label="Thiết bị đích">
-                <strong>{activeSession.deviceLabel}</strong> (ID:{' '}
-                <code>{activeSession.rustdeskId}</code>)
+                <strong>{activeSession.deviceLabel}</strong>
+                {activeSession.rustdeskId && <> (ID: <code>{activeSession.rustdeskId}</code>)</>}
               </Descriptions.Item>
               <Descriptions.Item label="Kỹ thuật viên yêu cầu">
                 {activeSession.technician.fullName}
@@ -470,17 +470,17 @@ export default function TicketRemoteSupportPanel({
                         Mở RustDesk Client ({activeSession.connectUri})
                       </Button>
                     )}
-                    <Button
+                    {activeSession.rustdeskId && <Button
                       icon={<CopyOutlined />}
                       onClick={() =>
                         copyToClipboard(
-                          activeSession.rustdeskId,
+                          activeSession.rustdeskId!,
                           'RustDesk ID',
                         )
                       }
                     >
                       Copy ID ({activeSession.rustdeskId})
-                    </Button>
+                    </Button>}
                     {activeSession.cliCommand && (
                       <Button
                         icon={<CopyOutlined />}
@@ -778,7 +778,7 @@ export default function TicketRemoteSupportPanel({
                     onChange={setTechDeviceId}
                     options={verifiedDevices.map((d) => ({
                       value: d.id,
-                      label: `${d.label} — RustDesk ID: ${d.rustdeskId}${
+                    label: `${d.label}${d.rustdeskId ? ` — RustDesk ID: ${d.rustdeskId}` : ''}${
                         d.osName ? ` (${d.osName})` : ''
                       }${
                         d.id === ctx.preferredDeviceId
@@ -961,7 +961,7 @@ export default function TicketRemoteSupportPanel({
                         {SESSION_STATUS_META[s.status].label}
                       </Tag>
                       <strong>{s.deviceLabel}</strong>
-                      <code>ID: {s.rustdeskId}</code>
+                      {s.rustdeskId && <code>ID: {s.rustdeskId}</code>}
                       <span>· Kỹ thuật viên: {s.technician.fullName}</span>
                     </Space>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>

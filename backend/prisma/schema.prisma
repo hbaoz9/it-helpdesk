@@ -519,7 +519,7 @@ model RustdeskServerConfig {
   publicKey          String?  @map("public_key")
   approvalTtlMinutes Int      @default(15) @map("approval_ttl_minutes")
   clientGuideUrl     String?  @map("client_guide_url")
-  enabled            Boolean  @default(true)
+  enabled            Boolean  @default(false)
   updatedById        String?  @map("updated_by_id") @db.Uuid
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")

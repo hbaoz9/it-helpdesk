@@ -645,6 +645,14 @@ export class AdminService {
     if (!existing) {
       throw new NotFoundException('Registered device not found');
     }
+    if (dto.verificationStatus === 'VERIFIED') {
+      if (!existing.active || dto.active === false) {
+        throw new ConflictException('Inactive device cannot be verified');
+      }
+      if (dto.observedRustdeskId !== existing.rustdeskId) {
+        throw new BadRequestException('Observed RustDesk ID does not match registered device');
+      }
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const device = await tx.userDevice.update({
@@ -698,6 +706,9 @@ export class AdminService {
             label: device.label,
             active: device.active,
             verificationStatus: device.verificationStatus,
+            ...(dto.verificationStatus === 'VERIFIED'
+              ? { verificationMethod: dto.verificationMethod, observedInPerson: true }
+              : {}),
           }),
         },
       });
@@ -736,7 +747,7 @@ export class AdminService {
         publicKey: null,
         approvalTtlMinutes: 15,
         clientGuideUrl: 'https://rustdesk.com/docs/en/client/',
-        enabled: true,
+        enabled: false,
       },
     });
   }
